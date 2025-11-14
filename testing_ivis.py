@@ -2,13 +2,11 @@
 r"""Test PCA with rank-based weighting on BBOB functions."""
 
 import numpy as np
-from dimensionality_reduction import WeightedPCA
+from dimensionality_reduction import IvisWrapper
 from weighting_premises import get_rank_based_weighting
 from qmc_samplers import get_sampler
 from scipy.stats import qmc
 from typing import List, Union
-from torch import Tensor
-import torch
 from ioh import get_problem
 
 
@@ -20,7 +18,7 @@ dimension = 20
 reduction_percent = 0.5  # Reduce to 50% of original dimensions
 n_components = int(dimension * reduction_percent)
 
-n_samples = 250*dimension  # Number of samples
+n_samples = 20*dimension  # Number of samples
 
 random_seed = 1234 # Random seed for reproducibility
 
@@ -44,35 +42,28 @@ ub = problem.bounds.ub
 # Scale samples to the problem bounds
 X = qmc.scale(X, lb, ub)
 
-X_tensor = torch.tensor(X, dtype=torch.float64)
-
 # Compute function values
 y_values = np.array([problem(x) for x in X])
-y_tensor = torch.tensor(y_values, dtype=torch.float64)
 
 # Get rank-based weighting
 weights = get_rank_based_weighting(method="logarithmic").compute_weights(values=y_values,
                                                                          decay=0.4)
 
+
 # Initialize Weighted PCA
-weighted_pca = WeightedPCA(n_components=n_components)
+ivis_model =IvisWrapper(n_components=n_components,
+                        k=10,
+                          distance='euclidean',
+                          epochs=1000,
+                          n_epochs_without_progress=50,
+                          model='maaten',
+                          verbose=True)
 
 # Fit and transform the data
-X_reduced = weighted_pca.fit_transform(X_tensor, weights=torch.from_numpy(weights))
+ivis_model.fit(X,weights=weights)
+X_reduced:np.ndarray = ivis_model.transform(X)
 
-print(f"Original shape: {X_tensor.shape}")
 print(f"Reduced shape: {X_reduced.shape}")
-
-# Perform the inverse transform
-X_reconstructed = weighted_pca.inverse_transform(X_reduced)
-
-# Compute reconstruction error
-reconstruction_error = (X_tensor - X_reconstructed).norm()
-print(f"Reconstruction error (Frobenius norm): {reconstruction_error.item()}")
-
-# Verify the reduced dimensions
-assert X_reduced.shape[1] == n_components, "Dimensionality reduction did not yield expected number of components."
-print("Dimensionality reduction successful with rank-based weighting.")
 
 
 

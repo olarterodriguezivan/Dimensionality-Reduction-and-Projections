@@ -54,12 +54,16 @@ class RankBasedWeighting:
         weights = np.log(n) - np.log(ranks)
         return weights / np.sum(weights)
     
-    def compute_weights(self, values: Union[np.ndarray,Tensor], **kwargs) -> np.ndarray:
+    def compute_weights(self, 
+                        values: Union[np.ndarray,Tensor], 
+                        is_maximization: bool = False,
+                        **kwargs) -> np.ndarray:
         """
         Compute rank-based weights for given values.
         
         Args:
             values: Input values to rank
+            is_maximization: If True, higher values get higher weights
             **kwargs: Additional parameters for weighting methods
             
         Returns:
@@ -68,20 +72,27 @@ class RankBasedWeighting:
 
         if isinstance(values, Tensor):
             values = values.cpu().numpy().ravel()
-
-        ranks = np.argsort(np.argsort(-values)) + 1  # Higher values get lower ranks
         
+        if not is_maximization:
+            ranks = np.argsort(np.argsort(values)) + 1  # Higher values get lower ranks
+        else:
+            ranks = np.argsort(np.argsort(-values)) + 1  # Higher values get higher ranks
+        
+        ret_weights = None
         if self.method == 'linear':
-            return self.linear_weights(ranks)
+            ret_weights = self.linear_weights(ranks)
         elif self.method == 'exponential':
             decay = kwargs.get('decay', 0.5)
-            return self.exponential_weights(ranks, decay)
+            ret_weights = self.exponential_weights(ranks, decay)
         elif self.method == 'inverse':
-            return self.inverse_weights(ranks)
+            ret_weights = self.inverse_weights(ranks)
         elif self.method == 'logarithmic':
-            return self.logarithmic_weights(ranks)
+            ret_weights = self.logarithmic_weights(ranks)
         else:
             raise ValueError(f"Unknown method: {self.method}")
+
+        # Return as numpy array with an epsilon to avoid zero weights
+        return np.add(ret_weights, 1e-10, where=(ret_weights>1e-12))
         
     
     @property
