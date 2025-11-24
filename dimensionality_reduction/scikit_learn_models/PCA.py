@@ -18,7 +18,7 @@ class WeightedPCA(SklearnPCA):
     def __init__(self, n_components=None, **kwargs):
         super().__init__(n_components=n_components, **kwargs)
         
-    def fit(self, X, y=None, sample_weight=None):
+    def fit(self, X, y=None, sample_weights=None):
         """
         Fit the PCA model with optional sample weights.
         
@@ -38,35 +38,37 @@ class WeightedPCA(SklearnPCA):
         """
         X = np.asarray(X)
         
-        if sample_weight is None:
-            # Use parent class fit method
-            return super().fit(X, y)
+        if sample_weights is None:
+            sample_weights = np.ones(X.shape[0])
+        else:
+            sample_weights = np.asarray(sample_weights).ravel()
         
-        # Weighted PCA
-        sample_weight = np.asarray(sample_weight)
         # Normalize weights
-        sample_weight = sample_weight / sample_weight.sum()
+        sample_weights = sample_weights / np.sum(sample_weights)
 
-        # Store the weights as an attribute
-        self._sample_weight = sample_weight
-        
-        # Compute weighted mean
-        self.mean_ = np.average(X, axis=0, weights=sample_weight)
-        
-        # Center data
-        X_centered = X - self.mean_
-        
-        # Compute weighted covariance matrix
-        X_weighted = X_centered * np.sqrt(sample_weight)[:, np.newaxis]
-        
-        # Use parent's _fit method on weighted centered data
-        # We need to temporarily set mean_ to zero to avoid double centering
-        temp_mean = self.mean_.copy()
-        self.mean_ = np.zeros_like(temp_mean)
-        super().fit(X_weighted, y)
-        self.mean_ = temp_mean
-        
-        return self
+        # Store the weights
+        self._sample_weights = sample_weights
+
+        # Center the data
+        self._mean = np.mean(X, axis=0)
+        X_centered = X - self._mean
+
+        X_weighted = X_centered * np.diag(self._sample_weights)
+
+        return super().fit(X_weighted, y)
+    
+    def transform(self, X:np.ndarray) -> np.ndarray:
+
+        # Transform data to the principal component space.
+        X = np.asarray(X)
+
+        # Uncenter the data
+        X_centered = X - self._mean
+
+        # Scale the data with sample weights
+        X_weighted = X_centered * np.diag(self._sample_weights)
+
+        return super().transform(X_weighted)
     
     def fit_transform(self, X, y=None, sample_weight=None):
         """
@@ -90,21 +92,6 @@ class WeightedPCA(SklearnPCA):
         return self.transform(X)
 
 
-    def transform(self, X):
-        """
-        Apply dimensionality reduction to X.
-        
-        Parameters
-        ----------
-        X : array-like of shape (n_samples, n_features)
-            New data to transform.
-            
-        Returns
-        -------
-        X_transformed : ndarray of shape (n_samples, n_components)
-            Transformed data.
-        """
-        return super().transform(X)
     
     def inverse_transform(self, X):
         """
@@ -120,30 +107,16 @@ class WeightedPCA(SklearnPCA):
         X_original : ndarray of shape (n_samples, n_features)
             Reconstructed data in the original space.
         """
-        return super().inverse_transform(X)
-    
 
-    @property
-    def sample_weights(self):
-        """
-        Get the sample weights used during fitting.
-        
-        Returns
-        -------
-        sample_weight : ndarray of shape (n_samples,) or None
-            Sample weights if provided during fitting, else None.
-        """
-        return self._sample_weights 
-    
+        # Perform the inverse transformation
+        X_reconstructed = super().inverse_transform(X)
 
-    @sample_weights.setter
-    def sample_weights(self, weights):
-        """
-        Set the sample weights.
+        # Unscale the data with sample weights
+        X_unscaled = X_reconstructed * np.diag(np.power(self._sample_weights,-1))
+
+        # Re-add the mean
+        X_original = X_unscaled + self._mean
+        return X_original
         
-        Parameters
-        ----------
-        weights : array-like of shape (n_samples,)
-            Sample weights to set.
-        """
-        self._sample_weights = np.asarray(weights)
+
+    

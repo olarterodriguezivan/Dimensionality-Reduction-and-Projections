@@ -8,7 +8,7 @@ class WeightedKPCA(KernelPCA):
     Extends scikit-learn's KernelPCA to support weighted samples.
     """
     
-    def fit(self, X, y=None, sample_weight=None):
+    def fit(self, X, y=None, sample_weights=None)-> 'WeightedKPCA':
         """
         Fit the model with X using weighted samples.
         
@@ -18,7 +18,7 @@ class WeightedKPCA(KernelPCA):
             Training data.
         y : None
             Ignored. Present for API consistency.
-        sample_weight : array-like of shape (n_samples,), default=None
+        sample_weights : array-like of shape (n_samples,), default=None
             Sample weights. If None, uniform weights are used.
             
         Returns
@@ -26,36 +26,87 @@ class WeightedKPCA(KernelPCA):
         self : object
             Returns the instance itself.
         """
-        if sample_weight is not None:
-            sample_weight = np.asarray(sample_weight)
-            if sample_weight.ndim != 1:
-                raise ValueError("sample_weight must be 1D array")
-            if len(sample_weight) != len(X):
-                raise ValueError("sample_weight must have same length as X")
-            
-            # Normalize weights
-            sample_weight = sample_weight / sample_weight.sum()
-            
-            # Apply weights by duplicating/resampling
-            # For kernel methods, we weight the kernel matrix
-            self._sample_weight = sample_weight
-        else:
-            self._sample_weight = None
-            
-        return super().fit(X, y)
-    
-    def _get_kernel(self, X, Y=None):
-        """
-        Compute weighted kernel matrix.
-        """
-        K = super()._get_kernel(X, Y)
+
+        X = np.asarray(X)
         
-        if hasattr(self, '_sample_weight') and self._sample_weight is not None:
-            # Weight the kernel matrix
-            W = np.sqrt(self._sample_weight)
-            if Y is None:
-                K = W[:, np.newaxis] * K * W[np.newaxis, :]
-            else:
-                K = W[:, np.newaxis] * K
-                
-        return K
+        if sample_weights is None:
+            sample_weights = np.ones(X.shape[0])
+        else:
+            sample_weights = np.asarray(sample_weights).ravel()
+        
+        # Normalize weights
+        sample_weights = sample_weights / np.sum(sample_weights)
+
+        # Store the weights
+        self._sample_weights = sample_weights
+
+        # Center the data
+        self._mean = np.mean(X, axis=0)
+        X_centered = X - self._mean
+
+        X_weighted = X_centered * np.diag(self._sample_weights)
+
+        return super().fit(X_weighted, y)
+    
+    def transform(self, X:np.ndarray) -> np.ndarray:
+        """
+        Transform X into the kernel PCA space.
+        
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            Data to transform.
+            
+        Returns
+        -------
+        X_transformed : array of shape (n_samples, n_components)
+            Transformed data.
+        """
+        X = np.asarray(X)
+
+        # Uncenter the data
+        X_centered = X - self._mean
+
+        X_weighted = X_centered * np.diag(self._sample_weights)
+
+        return super().transform(X_weighted)
+    
+    def fit_transform(self, X, y=None, sample_weights=None):
+        """
+        Fit the model and apply dimensionality reduction.
+        
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            Training data.
+        y : None
+            Ignored. Present for API consistency.
+        sample_weights : array-like of shape (n_samples,), default=None
+            Sample weights. If None, uniform weights are used.
+            
+        Returns
+        -------
+        X_transformed : ndarray of shape (n_samples, n_components)
+            Transformed data.
+        """
+        self.fit(X, y=y, sample_weights=sample_weights)
+        return self.transform(X)
+    
+
+    def inverse_transform(self, X):
+        """
+        Transform data back to its original space.
+        
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_components)
+            Data in the reduced space.
+            
+        Returns
+        -------
+        X_original : array-like of shape (n_samples, n_features)
+            Data in the original space.
+        """
+        # Inverse transform is not straightforward for KernelPCA.
+        # This is a placeholder implementation and may not yield accurate results.
+        raise NotImplementedError("Inverse transform is not implemented for 'this' WeightedKPCA.")

@@ -2,7 +2,7 @@ from sklearn.manifold import Isomap
 import numpy as np
 from typing import Optional, Union
 
-class IsomapWrapper:
+class IsomapWrapper(Isomap):
     """
     Wrapper class for scikit-learn's Isomap dimensionality reduction.
     """
@@ -52,7 +52,8 @@ class IsomapWrapper:
         metric_params : dict, optional
             Additional keyword arguments for the metric function
         """
-        self.isomap = Isomap(
+        
+        super().__init__(
             n_components=n_components,
             n_neighbors=n_neighbors,
             radius=radius,
@@ -70,7 +71,8 @@ class IsomapWrapper:
     
     def fit(self, 
             X: np.ndarray,
-            weights:Optional[np.ndarray]=None) -> 'IsomapWrapper':
+            y:Optional[np.ndarray]=None,
+            sample_weights:Optional[np.ndarray]=None) -> Isomap:
         """
         Fit the model from data in X.
         
@@ -78,6 +80,8 @@ class IsomapWrapper:
         -----------
         X : array-like, shape (n_samples, n_features)
             Training data
+        y : Ignored
+            Not used, present for API consistency.
         weights : array-like, shape (n_samples,), optional
             Sample weights to use during fitting (not used in Isomap)
             
@@ -86,25 +90,25 @@ class IsomapWrapper:
         self : object
         """
 
-        if weights is None:
-            weights = np.ones(X.shape[0])
+        if sample_weights is None:
+            sample_weights = np.ones(X.shape[0])
+        else:
+            sample_weights = np.asarray(sample_weights).ravel()
+
 
         # Transform the data
-        weights = weights/np.sum(weights)  # Normalize weights
-
+        sample_weights = sample_weights/np.sum(sample_weights)  # Normalize weights
+        
         # Store the weights
-        self._weights = weights
+        self._sample_weights = sample_weights
 
+        # Center the data
         self._mean = np.mean(X, axis=0)
         X_centered = X - self._mean
 
-        X_scaled = X_centered * weights.reshape(-1, 1)
+        X_scaled = X_centered * np.diag(sample_weights)
 
-
-
-        self.isomap.fit(X_scaled)
-        self.is_fitted = True
-        return self
+        return super().fit(X_scaled, y)
     
     def transform(self, X: np.ndarray) -> np.ndarray:
         """
@@ -121,12 +125,18 @@ class IsomapWrapper:
             Transformed data
         """
         if not self.is_fitted:
-            raise ValueError("Model must be fitted before transforming data.")
-        return self.isomap.transform(X)
+            raise ValueError("Model must be fitted first.")
+        
+        # Center the data
+        X_centered = X - self._mean
+
+        X_scaled = X_centered * np.diag(self._sample_weights)
+
+        return super().transform(X_scaled)
     
     def fit_transform(self, 
                       X: np.ndarray,
-                      weights:Optional[np.ndarray]=None) -> np.ndarray:
+                      sample_weights:Optional[np.ndarray]=None) -> np.ndarray:
         """
         Fit the model from data in X and transform X.
         
@@ -141,57 +151,21 @@ class IsomapWrapper:
             Transformed data
         """
 
-        if weights is None:
-            weights = np.ones(X.shape[0])
+        if sample_weights is None:
+            sample_weights = np.ones(X.shape[0])
 
         # Transform the data
-        weights = weights/np.sum(weights)  # Normalize weights
-
+        sample_weights = sample_weights/np.sum(sample_weights)  # Normalize weights
         # Store the weights
-        self._weights = weights
+        self._sample_weights = sample_weights
 
         self._mean = np.mean(X, axis=0)
         X_centered = X - self._mean
 
-        X_scaled = X_centered * weights.reshape(-1, 1)
+        X_scaled = X_centered * sample_weights.reshape(-1, 1)
 
         self.is_fitted = True
 
-        return self.isomap.fit_transform(X_scaled)
+        return super().fit_transform(X_scaled)
     
-    def get_params(self) -> dict:
-        """Get parameters for this estimator."""
-        return self.isomap.get_params()
     
-    def set_params(self, **params) -> 'IsomapWrapper':
-        """Set the parameters of this estimator."""
-        self.isomap.set_params(**params)
-        return self
-    
-    @property
-    def embedding_(self) -> np.ndarray:
-        """Stores the embedding vectors."""
-        if not self.is_fitted:
-            raise ValueError("Model must be fitted first.")
-        return self.isomap.embedding_
-    
-    @property
-    def kernel_pca_(self):
-        """KernelPCA object used to implement Isomap."""
-        if not self.is_fitted:
-            raise ValueError("Model must be fitted first.")
-        return self.isomap.kernel_pca_
-    
-    @property
-    def nbrs_(self):
-        """Stores the nearest neighbors instance."""
-        if not self.is_fitted:
-            raise ValueError("Model must be fitted first.")
-        return self.isomap.nbrs_
-    
-    @property
-    def dist_matrix_(self) -> np.ndarray:
-        """Stores the geodesic distance matrix of training data."""
-        if not self.is_fitted:
-            raise ValueError("Model must be fitted first.")
-        return self.isomap.dist_matrix_

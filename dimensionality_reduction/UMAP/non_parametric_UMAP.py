@@ -3,7 +3,7 @@ from sklearn.utils.validation import check_X_y, check_array
 import numpy as np
 import umap
 
-class NonParametricUMAP(BaseEstimator, TransformerMixin):
+class NonParametricUMAP(umap.UMAP):
     """
     Non-parametric UMAP implementation extending scikit-learn's transformer interface.
     
@@ -11,33 +11,130 @@ class NonParametricUMAP(BaseEstimator, TransformerMixin):
     parameterization, making it non-parametric.
     """
     
-    def __init__(self, n_neighbors=15, n_components=2, metric='euclidean', 
-                 min_dist=0.1, spread=1.0, random_state=None, **kwargs):
+    def __init__(self, 
+                    n_neighbors=15,
+                    n_components=2,
+                    metric="euclidean",
+                    metric_kwds=None,
+                    output_metric="euclidean",
+                    output_metric_kwds=None,
+                    n_epochs=None,
+                    learning_rate=1.0,
+                    init="spectral",
+                    min_dist=0.1,
+                    spread=1.0,
+                    low_memory=True,
+                    n_jobs=-1,
+                    set_op_mix_ratio=1.0,
+                    local_connectivity=1.0,
+                    repulsion_strength=1.0,
+                    negative_sample_rate=5,
+                    transform_queue_size=4.0,
+                    a=None,
+                    b=None,
+                    random_state=None,
+                    angular_rp_forest=False,
+                    target_n_neighbors=-1,
+                    target_metric="categorical",
+                    target_metric_kwds=None,
+                    target_weight=0.5,
+                    transform_seed=42,
+                    transform_mode="embedding",
+                    force_approximation_algorithm=False,
+                    verbose=False,
+                    tqdm_kwds=None,
+                    unique=False,
+                    densmap=False,
+                    dens_lambda=2.0,
+                    dens_frac=0.3,
+                    dens_var_shift=0.1,
+                    output_dens=False,
+                    disconnection_distance=None,
+                    precomputed_knn=(None, None, None),
+    ):
         """
         Initialize Non-parametric UMAP.
         
         Parameters:
         -----------
-        n_neighbors : int, default=15
-            Number of nearest neighbors to use
-        n_components : int, default=2
-            Number of dimensions for embedding
-        metric : str, default='euclidean'
-            Distance metric to use
-        min_dist : float, default=0.1
-            Minimum distance between embedded points
-        spread : float, default=1.0
-            Scale of embedded points
-        random_state : int or None, default=None
-            Random state for reproducibility
+        n_neighbors : int
+            The size of local neighborhood (in terms of number of neighboring sample points) used for manifold approximation.
+        n_components : int
+            The dimension of the space to embed into.
+        metric : str or callable
+            The metric to use to compute distances in high dimensional space.
+        min_dist : float
+            The effective minimum distance between embedded points.
+        spread : float
+            The effective scale of embedded points.
+        random_state : int, RandomState instance or None
+            If int, random_state is the seed used by the random number generator;
+            If RandomState instance, random_state is the random number generator;
+            If None, the random number generator is the RandomState instance used
+            by `np.random`.
+        verbose : bool
+            Whether to print progress messages during optimization.
+        tqdm_kwds : dict or None
+            Keyword arguments to pass to the tqdm progress bar.
+        densmap : bool
+            Whether to use DensMAP extension.
+        dens_lambda : float
+            DensMAP regularization strength.
+        dens_frac : float
+            Fraction of points used to estimate local density.
+        dens_var_shift : float
+            Variance shift for density estimation.
+        output_dens : bool
+            Whether to output density estimates alongside embeddings.
+        disconnection_distance : float or None
+            Distance threshold for disconnecting points in the embedding.
+        precomputed_knn : tuple or None
+            Precomputed KNN graph (distances, indices, n_neighbors) or None.
+        
         """
-        self.n_neighbors = n_neighbors
-        self.n_components = n_components
-        self.metric = metric
-        self.min_dist = min_dist
-        self.spread = spread
-        self.random_state = random_state
-        self.kwargs = kwargs
+        
+        # Call the parent constructor
+        super().__init__(
+            n_neighbors=n_neighbors,
+            n_components=n_components,
+            metric=metric,
+            min_dist=min_dist,
+            spread=spread,
+            random_state=random_state,
+            metric_kwds=metric_kwds,
+            output_metric=output_metric,
+            output_metric_kwds=output_metric_kwds,
+            n_epochs=n_epochs,
+            learning_rate=learning_rate,
+            init=init,
+            low_memory=low_memory,
+            n_jobs=n_jobs,
+            set_op_mix_ratio=set_op_mix_ratio,
+            local_connectivity=local_connectivity,
+            repulsion_strength=repulsion_strength,
+            negative_sample_rate=negative_sample_rate,
+            transform_queue_size=transform_queue_size,
+            a=a,
+            b=b,
+            angular_rp_forest=angular_rp_forest,
+            target_n_neighbors=target_n_neighbors,
+            target_metric=target_metric,
+            target_metric_kwds=target_metric_kwds,
+            target_weight=target_weight,
+            transform_seed=transform_seed,
+            transform_mode=transform_mode,
+            force_approximation_algorithm=force_approximation_algorithm,
+            verbose=verbose,
+            tqdm_kwds=tqdm_kwds,
+            unique=unique,
+            densmap=densmap,
+            dens_lambda=dens_lambda,
+            dens_frac=dens_frac,
+            dens_var_shift=dens_var_shift,
+            output_dens=output_dens,
+            disconnection_distance=disconnection_distance,
+            precomputed_knn=precomputed_knn,
+        )
         
     def fit(self, X, y=None):
         """
@@ -55,25 +152,10 @@ class NonParametricUMAP(BaseEstimator, TransformerMixin):
         self : object
             Returns the instance itself
         """
-        X = check_array(X, accept_sparse=False)
         
-        # Initialize UMAP with non-parametric settings
-        self.umap_model_ = umap.UMAP(
-            n_neighbors=self.n_neighbors,
-            n_components=self.n_components,
-            metric=self.metric,
-            min_dist=self.min_dist,
-            spread=self.spread,
-            random_state=self.random_state,
-            **self.kwargs
-        )
-        
-        # Fit the model
-        self.embedding_ = self.umap_model_.fit_transform(X)
-        
-        return self
     
-    def transform(self, X):
+    def transform(self, 
+                  X:np.ndarray):
         """
         Transform new data using the fitted UMAP model.
         

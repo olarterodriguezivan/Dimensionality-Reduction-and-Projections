@@ -19,7 +19,7 @@ ALLOWED_REGRESSION_METRICS = ['mean_squared_error', 'mean_absolute_error', 'mean
                                "log_cosh", "tversky", "dice" ]
 
 
-class IvisWrapper:
+class IvisWrapper(Ivis):
     """
     Wrapper class for the ivis dimensionality reduction algorithm.
     
@@ -93,7 +93,7 @@ class IvisWrapper:
             raise ValueError("model must be one of ['maaten', 'hinton', 'szubert']")
         
 
-        self._model:Ivis = Ivis(
+        super().__init__(
             embedding_dims=n_components,
             k=k,
             distance=distance,
