@@ -4,8 +4,10 @@ from torch.optim import Adam, SGD
 from typing import Optional, List, Tuple
 from torch.functional import block_diag
 
+from sklearn.base import BaseEstimator, TransformerMixin
 
-class WeightedPCA:
+
+class WeightedPCA(BaseEstimator, TransformerMixin):
     def __init__(self, 
                  n_components: int):
         r"""

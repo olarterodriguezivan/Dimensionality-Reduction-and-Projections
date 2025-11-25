@@ -4,7 +4,9 @@ from typing import Optional
 import gpytorch
 import numpy as np
 
-class WeightedKPCA:
+from sklearn.base import BaseEstimator, TransformerMixin
+
+class WeightedKPCA(BaseEstimator, TransformerMixin):
     """
     Weighted Kernel Principal Component Analysis (Weighted KPCA) using GPyTorch and PyTorch
     
@@ -120,7 +122,9 @@ class WeightedKPCA:
 
         # Handle weights
         if weights is None:
-            weights = torch.ones(n_features, device=X.device)
+            weights = torch.ones(n_features, device=self.device)
+        else:
+            weights = torch.tensor(weights, dtype=torch.float32, device=self.device)
         
         # Store weights
         self.weights_ = weights
@@ -138,6 +142,7 @@ class WeightedKPCA:
         
         # Create kernel and compute kernel matrix
         kernel:gpytorch.kernels.Kernel = self._get_kernel()
+        
         if self.kernel in ['rbf']:
             kernel.lengthscale = self.lengthscale
         
