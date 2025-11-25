@@ -13,12 +13,12 @@ from ioh import get_problem
 # Define a simple test function
 problem_id = 1  # Sphere function
 problem_instance = 1 # Instance ID
-dimension = 20
+dimension = 40
 
-reduction_percent = 0.5  # Reduce to 50% of original dimensions
+reduction_percent = 0.25  # Reduce to 50% of original dimensions
 n_components = int(dimension * reduction_percent)
 
-n_samples = 20*dimension  # Number of samples
+n_samples = 40*dimension  # Number of samples
 
 random_seed = 1234 # Random seed for reproducibility
 
@@ -52,15 +52,17 @@ weights = get_rank_based_weighting(method="logarithmic").compute_weights(values=
 
 # Initialize Weighted PCA
 ivis_model =IvisWrapper(n_components=n_components,
-                        k=10,
-                          distance='euclidean',
-                          epochs=1000,
-                          n_epochs_without_progress=50,
-                          model='maaten',
-                          verbose=True)
+                        k=50,
+                        distance='euclidean',
+                        epochs=1000,
+                        n_epochs_without_progress=50,
+                        model='hinton',
+                        supervision_metric="mean_squared_error",
+                        verbose=True)
 
 # Fit and transform the data
-ivis_model.fit(X,weights=weights)
+#ivis_model.fit(X,Y=y_values)
+ivis_model.fit(X, Y=y_values)
 X_reduced:np.ndarray = ivis_model.transform(X)
 
 print(f"Reduced shape: {X_reduced.shape}")

@@ -25,6 +25,8 @@ class IvisWrapper(Ivis):
     
     Ivis is a machine learning library for reducing dimensionality of very large datasets
     using Siamese Neural Networks.
+
+    Note that this wrapper is just meant for supervised ivis, where regression targets are provided.
     """
 
     
@@ -112,8 +114,9 @@ class IvisWrapper(Ivis):
             verbose=verbose
         )
         
-    def fit(self, X: np.ndarray, Y: Optional[np.ndarray] = None, 
-            weights:Optional[Union[np.ndarray,List]]=None) -> 'IvisWrapper':
+    def fit(self, 
+            X: np.ndarray, 
+            Y:np.ndarray) -> 'IvisWrapper':
         """
         Fit the ivis model.
         
@@ -121,36 +124,24 @@ class IvisWrapper(Ivis):
         ----------
         X : array-like, shape (n_samples, n_features)
             Training data.
-        Y : array-like, shape (n_samples,), optional
+        Y : array-like, shape (n_samples,)
             Target values for supervised dimensionality reduction.
-        weights : array-like, shape (n_samples,), optional
-            Sample weights to use during training.
         Returns
         -------
         self : IvisWrapper
             Returns the instance itself.
         """
 
-        # Set weights
-        self.weights = weights
+        assert len(X.shape) == 2, "X must be a 2D array."
+        assert Y is None or len(Y.shape) == 1, "Y must be a 1D array or None."
 
         # Compute mean for centering
         self._mean = np.mean(X, axis=0)
 
         X_centered = X - self._mean
+        
+        super().fit(X_centered,Y)
 
-        # Use weights if provided
-        if self.weights is not None:
-            X_mod = X_centered* self.weights.reshape(-1, 1)
-        else:
-            X_mod = X_centered
-            
-
-        # Transform 
-        if Y is not None:
-            self._model.fit(X_mod,Y)
-        else:
-            self._model.fit(X_mod)
         return self
         
     def transform(self, X: np.ndarray) -> np.ndarray:
@@ -172,129 +163,27 @@ class IvisWrapper(Ivis):
         X_mod = X - self._mean
 
         # Return transformed data
-        return self._model.transform(X_mod)
+        return super().transform(X_mod)
         
-    def fit_transform(self, X: np.ndarray, 
-                      Y: Optional[np.ndarray] = None,
-                      weights:Optional[Union[np.ndarray,List]]=None) -> np.ndarray:
+    def fit_transform(self, 
+                      X: np.ndarray, 
+                      Y: np.ndarray) -> np.ndarray:
         """
         Fit the model and transform the data.
         
         Parameters
-        ----------
+        ---------
         X : array-like, shape (n_samples, n_features)
             Training data.
-        Y : array-like, shape (n_samples,), optional
+        Y : array-like, shape (n_samples,)
             Target values for supervised dimensionality reduction.
-        weights : array-like, shape (n_samples,), optional
-            Sample weights to use during training.
             
         Returns
         -------
         X_transformed : array-like, shape (n_samples, embedding_dims)
             Transformed data in the embedding space.
         """
-        # Set weights
-        self.weights = weights
-
-        # Compute mean for centering
-        self._mean = np.mean(X, axis=0)
-
-        X_centered = X - self._mean
-
-        # Use weights if provided
-        if self.weights is not None:
-            X_mod = X_centered * self.weights.reshape(-1, 1)
-        else:
-            X_mod = X_centered
-        
-        # Fit and transform
-        if Y is not None:
-            return self._model.fit_transform(X_mod, Y, shuffle_mode=True)
-        else:
-            return self._model.fit_transform(X_mod, shuffle_mode=True)
-        
-    def save_model(self, filepath: str) -> None:
-        """
-        Save the trained model to disk.
-        
-        Parameters
-        ----------
-        filepath : str
-            Path where to save the model.
-        """
-        self._model.save_model(filepath)
-        
-    def load_model(self, filepath: str) -> None:
-        """
-        Load a pre-trained model from disk.
-        
-        Parameters
-        ----------
-        filepath : str
-            Path to the saved model.
-        """
-        self._model.load_model(filepath)
+        return self.fit(X, Y).transform(X)
     
-    @property
-    def model(self) -> Ivis:
-        """
-        Get the underlying ivis model (deepcopy).
-        
-        Returns
-        -------
-        model : Ivis
-            The underlying ivis model instance.
-        """
-        return deepcopy(self._model)
-
-    @property
-    def model_params(self) -> dict:
-        """
-        Get the model parameters.
-        
-        Returns
-        -------
-        params : dict
-            Dictionary of model parameters.
-        """
-        return self._model.get_params()
     
-    @property
-    def weights(self) -> Optional[np.ndarray]:
-        """
-        Get the sample weights used during training.
-        
-        Returns
-        -------
-        weights : np.ndarray or None
-            Sample weights if provided during initialization, else None.
-        """
-        return self._weights
     
-    @weights.setter
-    def weights(self, value: Optional[Union[np.ndarray, List]]) -> None:
-        """
-        Set the sample weights.
-        
-        Parameters
-        ----------
-        value : np.ndarray or list or None
-            Sample weights to set.
-        """
-        if value is not None:
-            if isinstance(value, list):
-                self._weights = np.array(value)
-            elif isinstance(value, np.ndarray):
-                self._weights = value
-            else:
-                raise ValueError("Weights must be a numpy array, list, or None.")
-        else:
-            self._weights = None
-    
-    @weights.deleter
-    def weights(self) -> None:
-        """
-        Delete the sample weights.
-        """
-        self._weights = None
