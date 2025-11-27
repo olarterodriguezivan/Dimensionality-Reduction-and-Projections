@@ -3,8 +3,10 @@ from sklearn.utils.validation import check_X_y, check_array
 import numpy as np
 import umap
 
+# CONSTANTS
+DEFAULT_TARGET_METRICS = {"l1", "l2"}
 class NonParametricUMAP(umap.UMAP):
-    """
+    r"""
     Non-parametric UMAP implementation extending scikit-learn's transformer interface.
     
     This implementation uses the standard UMAP algorithm without neural network
@@ -35,7 +37,7 @@ class NonParametricUMAP(umap.UMAP):
                     random_state=None,
                     angular_rp_forest=False,
                     target_n_neighbors=-1,
-                    target_metric="categorical",
+                    target_metric="l1",
                     target_metric_kwds=None,
                     target_weight=0.5,
                     transform_seed=42,
@@ -90,8 +92,53 @@ class NonParametricUMAP(umap.UMAP):
             Distance threshold for disconnecting points in the embedding.
         precomputed_knn : tuple or None
             Precomputed KNN graph (distances, indices, n_neighbors) or None.
+        target_metric : str
+            The metric to use for target space when performing supervised UMAP.
+        target_n_neighbors : int
+            The number of neighbors to consider in the target space.
+        target_weight : float
+            The weighting factor between the data space and target space.
+        transform_mode : {'embedding', 'graph', 'spectral'}
+            The mode to use for transforming new data.
+        force_approximation_algorithm : bool
+            Whether to force the use of the approximation algorithm for large datasets.
+        tqdm_kwds : dict or None
+            Keyword arguments to pass to the tqdm progress bar.
+        unique : bool
+            Whether to ensure unique embeddings for identical points.
+        densmap : bool
+            Whether to use DensMAP extension.
+        dens_lambda : float
+            DensMAP regularization strength.
+        dens_frac : float
+            Fraction of points used to estimate local density.
+        dens_var_shift : float
+            Variance shift for density estimation.
+        output_dens : bool
+            Whether to output density estimates alongside embeddings.
+        disconnection_distance : float or None
+            Distance threshold for disconnecting points in the embedding.
+        precomputed_knn : tuple or None
+            Precomputed KNN graph (distances, indices, n_neighbors) or None.
+        
+        See Also:
+        --------
+        umap.UMAP : Original UMAP implementation.
+
+        Raises:
+        ------
+        ValueError
+            If target_metric is not in DEFAULT_TARGET_METRICS.
+        
+        Returns:
+        -------
+        self : object
+            Unfitted NonParametricUMAP instance.S
         
         """
+
+        if target_metric not in DEFAULT_TARGET_METRICS:
+            raise ValueError(f"target_metric must be one of {DEFAULT_TARGET_METRICS}, got {target_metric}")
         
         # Call the parent constructor
         super().__init__(
@@ -136,7 +183,7 @@ class NonParametricUMAP(umap.UMAP):
             precomputed_knn=precomputed_knn,
         )
         
-    def fit(self, X, y=None):
+    def fit(self, X, y, **kwargs):
         """
         Fit the UMAP model to the data.
         
@@ -152,32 +199,31 @@ class NonParametricUMAP(umap.UMAP):
         self : object
             Returns the instance itself
         """
-        
+
+        X, y = check_X_y(X, y, accept_sparse=['csr', 'csc', 'coo'])
+        super().fit(X,y,ensure_all_finite=True, **kwargs)
+        return self
     
-    def transform(self, 
-                  X:np.ndarray):
+    def transform(self, X):
         """
-        Transform new data using the fitted UMAP model.
+        Transform new data into the UMAP embedding space.
         
         Parameters:
         -----------
         X : array-like, shape (n_samples, n_features)
-            Data to transform
+            New data to transform.
             
         Returns:
         --------
         X_transformed : array-like, shape (n_samples, n_components)
             Transformed data
         """
-        if not hasattr(self, 'umap_model_'):
-            raise ValueError("Model must be fitted before transform")
-            
-        X = check_array(X, accept_sparse=False)
-        return self.umap_model_.transform(X)
+        X = check_array(X, accept_sparse=['csr', 'csc', 'coo'])
+        return super().transform(X)
     
-    def fit_transform(self, X, y=None):
+    def fit_transform(self, X, y=None, **kwargs):
         """
-        Fit the model and transform the data.
+        Fit the UMAP model to the data and transform it in one step.
         
         Parameters:
         -----------
@@ -191,28 +237,23 @@ class NonParametricUMAP(umap.UMAP):
         X_transformed : array-like, shape (n_samples, n_components)
             Transformed data
         """
-        return self.fit(X, y).embedding_
+
+        X, y = check_X_y(X, y, accept_sparse=['csr', 'csc', 'coo'])
+        return super().fit_transform(X,y= y, ensure_all_finite=True, **kwargs)
     
-    def get_params(self, deep=True):
-        """Get parameters for this estimator."""
-        params = {
-            'n_neighbors': self.n_neighbors,
-            'n_components': self.n_components,
-            'metric': self.metric,
-            'min_dist': self.min_dist,
-            'spread': self.spread,
-            'random_state': self.random_state
-        }
-        if deep:
-            params.update(self.kwargs)
-        return params
-    
-    def set_params(self, **params):
-        """Set parameters for this estimator."""
-        for key, value in params.items():
-            if key in ['n_neighbors', 'n_components', 'metric', 'min_dist', 
-                      'spread', 'random_state']:
-                setattr(self, key, value)
-            else:
-                self.kwargs[key] = value
-        return self
+    def inverse_transform(self, X):
+        """
+        Inverse transform data from the UMAP embedding space back to the original space.
+        
+        Parameters:
+        -----------
+        X : array-like, shape (n_samples, n_components)
+            Data in the UMAP embedding space.
+            
+        Returns:
+        --------
+        X_original : array-like, shape (n_samples, n_features)
+            Data transformed back to the original space.
+        """
+        X = check_array(X, accept_sparse=['csr', 'csc', 'coo'])
+        return super().inverse_transform(X)
