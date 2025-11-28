@@ -1,3 +1,16 @@
+from __future__ import annotations
+
+# Ensure the installation of numpy and scipy is done
+try:
+    import numpy as np
+    from scipy.stats import qmc
+except ImportError as e:
+    raise ImportError(
+        "This package requires numpy and scipy. "
+        "Please install them via pip: pip install numpy scipy"
+    ) from e
+
+
 from .halton import halton_wrapper 
 from .lhs import lhs_wrapper 
 from .monte_carlo import monte_carlo_wrapper 

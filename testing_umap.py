@@ -1,7 +1,3 @@
-import numba
-import numpy
-import llvmlite
-
 import sklearn.datasets
 from sklearn.datasets import load_digits
 
