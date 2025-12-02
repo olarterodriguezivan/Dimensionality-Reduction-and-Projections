@@ -55,6 +55,11 @@ cover/
 *.mo
 *.pot
 
+# Special CSV Files
+*.csv.gz
+*evaluations.csv
+*ela_features.csv
+
 # Django stuff:
 *.log
 local_settings.py
