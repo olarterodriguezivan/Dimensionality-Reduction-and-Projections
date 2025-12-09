@@ -4,14 +4,36 @@ import numpy as np
 from typing import List, Tuple, Dict
 import os
 from multiprocessing import Pool, cpu_count
+from ioh import get_problem
 
 # pflacco imports
 from pflacco.classical_ela_features import (
+    # Classical ELA features
     calculate_ela_meta,
     calculate_ela_distribution,
+    calculate_ela_level,
+    calculate_ela_local,
+    calculate_ela_curvate,
+    calculate_ela_conv,
+
+    # Cell mapping features
+    calculate_cm_angle,
+    calculate_cm_conv,
+    calculate_cm_grad,
+
+    # Linear model features
+    calculate_limo,
+
+    #Nearest better clustering
     calculate_nbc,
+
+    # Dispersion features Lunacek and Whitley
     calculate_dispersion,
+
+    # Information content features Muñoz et al.
     calculate_information_content,
+
+    # PCA features
     calculate_pca
 )
 
@@ -73,12 +95,47 @@ def distill_y_sample_list(file_list: List[Path]) -> Dict[Tuple, Tuple[Path, int,
 # ---------------------------------------------------------
 # ELA Feature Extraction
 # ---------------------------------------------------------
-def extract_ela_features(seed: int, X: np.ndarray, fX: np.ndarray) -> pd.DataFrame:
+def extract_ela_features(seed: int, 
+                         X: np.ndarray,
+                           fX: np.ndarray,
+                           dim:int,
+                           fid: int,
+                           inst_id: int) -> pd.DataFrame:
+    
+    # Instantiate a function object
+    problem = get_problem(fid, inst_id, dim)
+
+
+    ### CLASSICAL ELA FEATURES ###
+    # Raw data is X and fX
     ela_meta = calculate_ela_meta(X, fX)
     ela_distr = calculate_ela_distribution(X, fX)
+    ela_level = calculate_ela_level(X,fX, ela_level_quantiles=[0.1,0.25,0.5], problem=problem)
+
+    # Require extra problem info and more samples
+    ela_local = calculate_ela_local(X, fX, problem,dim,lower_bound=-5.0, upper_bound=5.0, seed=seed)
+    ela_curvate = calculate_ela_curvate(X,fX,problem,dim,lower_bound=-5.0, upper_bound=5.0, seed=seed)
+    ela_conv = calculate_ela_conv(X, fX,problem)
+
+    ### CELL MAPPING FEATURES ###
+    cm_angle = calculate_cm_angle(X, fX,lower_bound=-5.0, upper_bound=5.0)
+    cm_conv = calculate_cm_conv(X, fX, lower_bound=-5.0, upper_bound=5.0)
+    cm_grad = calculate_cm_grad(X, fX, lower_bound=-5.0, upper_bound=5.0)
+
+    
+    ### LINEAR MODEL FEATURES ###
+    limo = calculate_limo(X, fX, upper_bound=5.0, lower_bound=-5.0)
+
+    ### NEAREST BETTER CLUSTERING ###
     nbc = calculate_nbc(X, fX)
+
+    ### DISPERSION FEATURES ###
     disp = calculate_dispersion(X, fX)
+
+    ### INFORMATION CONTENT FEATURES ###
     ic = calculate_information_content(X, fX, seed=seed)
+
+    ### PCA FEATURES ###
     pca_features = calculate_pca(X, fX)
 
     return pd.DataFrame({**ela_meta, **ela_distr, **nbc, **disp, **ic, **pca_features}, index=[0])
