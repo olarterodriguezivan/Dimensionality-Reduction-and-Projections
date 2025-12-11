@@ -1,6 +1,7 @@
 import numpy as np
 from numpy.linalg import eigh, pinv
 from scipy.linalg import sqrtm
+from joblib import load, dump
 from typing import Optional
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.decomposition import FastICA
@@ -49,7 +50,8 @@ class WeightedFastICA(FastICA):
         # Initialize a scaler for later use
         self._scaler = MinMaxScaler()
 
-    def fit(self, X: np.ndarray, y: Optional[np.ndarray] = None,
+    def fit(self, X: np.ndarray, 
+            y: Optional[np.ndarray] = None,
             sample_weights: Optional[np.ndarray] = None) -> 'WeightedFastICA':
         
         if sample_weights is None:
@@ -86,5 +88,23 @@ class WeightedFastICA(FastICA):
     
     def fit_transform(self, X, y = None, sample_weights: Optional[np.ndarray] = None) -> np.ndarray:
         return self.fit(X, y, sample_weights=sample_weights).transform(X)
+    
+
+    # ---------------------------------------
+    # Saving and loading methods
+    # ---------------------------------------
+
+    # ---------------------------------------
+    # Saving and loading methods
+    # ---------------------------------------
+
+    def save_model(self, path: str)-> None:
+        """Save the entire wrapper (reducer + model + state)."""
+        dump(self, path)
+
+    @staticmethod
+    def load_model(path: str) -> 'WeightedFastICA':
+        """Load a wrapper from disk."""
+        return load(path)
 
     

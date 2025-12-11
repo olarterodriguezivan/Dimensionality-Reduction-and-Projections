@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn.manifold import LocallyLinearEmbedding
+from joblib import load, dump
 from typing import Optional
 
 
@@ -67,4 +68,17 @@ class LLEWrapper(LocallyLinearEmbedding):
     
     def fit_transform(self, X, y = None, sample_weights: Optional[np.ndarray] = None) -> np.ndarray:
         return self.fit(X, y, sample_weights=sample_weights).transform(X)
+    
+    # ---------------------------------------
+    # Saving and loading methods
+    # ---------------------------------------
+
+    def save_model(self, path: str)-> None:
+        """Save the entire wrapper (reducer + model + state)."""
+        dump(self, path)
+
+    @staticmethod
+    def load(path: str) -> 'LLEWrapper':
+        """Load a wrapper from disk."""
+        return load(path)
     

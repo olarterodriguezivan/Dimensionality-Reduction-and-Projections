@@ -1,5 +1,6 @@
 import numpy as np
 from typing import Optional, Union, Tuple, List
+from pathlib import Path
 from copy import deepcopy, copy
 
 
@@ -184,6 +185,36 @@ class IvisWrapper(Ivis):
             Transformed data in the embedding space.
         """
         return self.fit(X, Y).transform(X)
+    
+
+    def save_model(self, folder_path: str) -> None:
+        """
+        Save the trained model to a file.
+        
+        Parameters
+        ----------
+        folder_path : str
+            Path to the folder where the model will be saved.
+        """
+        super().save_model(folder_path,
+                           save_format="h5")
+    
+    @staticmethod
+    def load_model(filepath: str) -> 'IvisWrapper':
+        """
+        Load a trained model from a file.
+        
+        Parameters
+        ----------
+        filepath : str
+            Path to the file from which the model will be loaded.
+            
+        Returns
+        -------
+        model : IvisWrapper
+            The loaded ivis model.
+        """
+        return super().load_model(filepath)
     
     
     

@@ -1,5 +1,6 @@
 from sklearn.decomposition import PCA as SklearnPCA
 from sklearn.preprocessing import MinMaxScaler
+from joblib import load, dump
 import numpy as np
 
 class WeightedPCA(SklearnPCA):
@@ -125,6 +126,20 @@ class WeightedPCA(SklearnPCA):
         # Re-add the mean
         X_original = X_unscaled + self._mean
         return X_original
+    
+
+    # ---------------------------------------
+    # Saving and loading methods
+    # ---------------------------------------
+
+    def save_model(self, path: str)-> None:
+        """Save the entire wrapper (reducer + model + state)."""
+        dump(self, path)
+
+    @staticmethod
+    def load(path: str) -> 'WeightedPCA':
+        """Load a wrapper from disk."""
+        return load(path)
         
 
     

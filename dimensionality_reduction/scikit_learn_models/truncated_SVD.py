@@ -1,4 +1,5 @@
 from sklearn.decomposition import TruncatedSVD
+from joblib import load, dump
 import numpy as np
 
 
@@ -156,3 +157,16 @@ class WeightedTruncatedSVD(TruncatedSVD):
         X_original = X_centered + self._mean
 
         return X_original
+    
+    # ---------------------------------------
+    # Saving and loading methods
+    # ---------------------------------------
+
+    def save_model(self, path: str)-> None:
+        """Save the entire wrapper (reducer + model + state)."""
+        dump(self, path)
+
+    @staticmethod
+    def load_model(path: str) -> 'WeightedTruncatedSVD':
+        """Load a wrapper from disk."""
+        return load(path)

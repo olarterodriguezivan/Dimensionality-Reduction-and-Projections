@@ -2,6 +2,8 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils.validation import check_X_y, check_array
 import numpy as np
 import umap
+from typing import Optional
+from joblib import load, dump
 
 # CONSTANTS
 DEFAULT_TARGET_METRICS = {"l1", "l2"}
@@ -257,3 +259,33 @@ class NonParametricUMAP(umap.UMAP):
         """
         X = check_array(X, accept_sparse=['csr', 'csc', 'coo'])
         return super().inverse_transform(X)
+    
+    # Saving and loading methods
+    # ---------------------------------------
+    def save_model(self, path: str) -> None:
+        """
+        Save the entire NonParametricUMAP model to disk.
+        
+        Parameters:
+        -----------
+        path : str
+            Path to the file where the model will be saved.
+        """
+        dump(self, path)
+    
+    @staticmethod
+    def load(path: str) -> 'NonParametricUMAP':
+        """
+        Load a NonParametricUMAP model from disk.
+        
+        Parameters:
+        -----------
+        path : str
+            Path to the file where the model is saved.
+            
+        Returns:
+        --------
+        model : NonParametricUMAP
+            Loaded NonParametricUMAP model.
+        """
+        return load(path)

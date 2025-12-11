@@ -1,6 +1,7 @@
 from sklearn.manifold import Isomap
 import numpy as np
 from typing import Optional, Union
+from joblib import load, dump
 
 class IsomapWrapper(Isomap):
     """
@@ -167,5 +168,18 @@ class IsomapWrapper(Isomap):
         self.is_fitted = True
 
         return super().fit_transform(X_scaled)
+    
+    # ---------------------------------------
+    # Saving and loading methods
+    # ---------------------------------------
+
+    def save_model(self, path: str)-> None:
+        """Save the entire wrapper (reducer + model + state)."""
+        dump(self, path)
+
+    @staticmethod
+    def load(path: str) -> 'IsomapWrapper':
+        """Load a wrapper from disk."""
+        return load(path)
     
     

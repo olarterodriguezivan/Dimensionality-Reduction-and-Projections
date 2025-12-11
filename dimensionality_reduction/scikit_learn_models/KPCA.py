@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn.decomposition import KernelPCA
+from joblib import load, dump
 
 class WeightedKPCA(KernelPCA):
     """
@@ -110,3 +111,16 @@ class WeightedKPCA(KernelPCA):
         # Inverse transform is not straightforward for KernelPCA.
         # This is a placeholder implementation and may not yield accurate results.
         raise NotImplementedError("Inverse transform is not implemented for 'this' WeightedKPCA.")
+    
+    # ---------------------------------------
+    # Saving and loading methods
+    # ---------------------------------------
+
+    def save_model(self, path: str)-> None:
+        """Save the entire wrapper (reducer + model + state)."""
+        dump(self, path)
+
+    @staticmethod
+    def load(path: str) -> 'WeightedKPCA':
+        """Load a wrapper from disk."""
+        return load(path)

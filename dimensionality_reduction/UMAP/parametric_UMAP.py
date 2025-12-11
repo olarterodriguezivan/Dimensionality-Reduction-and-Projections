@@ -1,6 +1,9 @@
 import numpy as np
-from umap.parametric_umap import ParametricUMAP
+from umap.parametric_umap import ParametricUMAP, load_ParametricUMAP
 from dimensionality_reduction.UMAP.non_parametric_UMAP import DEFAULT_TARGET_METRICS
+from typing import Optional
+from joblib import load, dump
+#from keras.models import load_model, save_model
 
 class ParametricUMAPTransformer(ParametricUMAP):
     """
@@ -133,3 +136,37 @@ class ParametricUMAPTransformer(ParametricUMAP):
             Data transformed back to the original space.
         """
         return super().inverse_transform(X)
+    
+
+    def save_model(self, folder_path: str) -> None:
+        """
+        This is just a wrapper to save both the UMAP model and the Keras models.
+        Parameters
+        ----------
+        folder_path : str
+            Path to the folder where the model will be saved.
+        """
+
+        super().save(folder_path,
+                     verbose=True,
+                       save_format="h5")
+
+
+    @staticmethod
+    def load_model(folder_path: str) -> 'ParametricUMAPTransformer':
+        """
+        Load a ParametricUMAPTransformer model from disk.
+        
+        Parameters
+        ----------
+        folder_path : str
+            Path to the folder where the model is saved.
+            
+        Returns
+        -------
+        model : ParametricUMAPTransformer
+            The loaded ParametricUMAPTransformer model.
+        """
+        return load_ParametricUMAP(save_location=folder_path,
+                                   verbose=True)
+        
