@@ -59,6 +59,7 @@ cover/
 *.csv.gz
 *evaluations.csv
 *ela_features.csv
+*ela_features_2.csv
 
 # Django stuff:
 *.log
