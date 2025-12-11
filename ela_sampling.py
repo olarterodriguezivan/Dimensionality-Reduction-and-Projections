@@ -37,6 +37,14 @@ from pflacco.classical_ela_features import (
     calculate_pca
 )
 
+from pflacco.misc_features import (
+    
+    calculate_fitness_distance_correlation,
+    calculate_gradient_features,
+    calculate_hill_climbing_features,
+    calculate_length_scales_features,
+    calculate_sobol_indices_features)
+
 # ---------------------------------------------------------
 # Simple helpers
 # ---------------------------------------------------------
@@ -110,24 +118,25 @@ def extract_ela_features(seed: int,
     # Raw data is X and fX
     ela_meta = calculate_ela_meta(X, fX)
     ela_distr = calculate_ela_distribution(X, fX)
-    ela_level = calculate_ela_level(X,fX, ela_level_quantiles=[0.1,0.25,0.5], problem=problem)
+    ela_level = calculate_ela_level(X,fX, ela_level_quantiles=[0.1,0.25,0.5])
 
     # Require extra problem info and more samples
-    ela_local = calculate_ela_local(X, fX, problem,dim,lower_bound=-5.0, upper_bound=5.0, seed=seed)
-    ela_curvate = calculate_ela_curvate(X,fX,problem,dim,lower_bound=-5.0, upper_bound=5.0, seed=seed)
-    ela_conv = calculate_ela_conv(X, fX,problem)
+    #ela_local = calculate_ela_local(X, fX, problem,dim,lower_bound=-5.0, upper_bound=5.0, seed=seed)
+    #ela_curvate = calculate_ela_curvate(X,fX,problem,dim,lower_bound=-5.0, upper_bound=5.0, seed=seed)
+    #ela_conv = calculate_ela_conv(X, fX,problem)
 
     ### CELL MAPPING FEATURES ###
-    cm_angle = calculate_cm_angle(X, fX,lower_bound=-5.0, upper_bound=5.0)
-    cm_conv = calculate_cm_conv(X, fX, lower_bound=-5.0, upper_bound=5.0)
-    cm_grad = calculate_cm_grad(X, fX, lower_bound=-5.0, upper_bound=5.0)
+    #cm_angle = calculate_cm_angle(X, fX,lower_bound=-5.0, upper_bound=5.0)
+    #cm_conv = calculate_cm_conv(X, fX, lower_bound=-5.0, upper_bound=5.0)
+    #cm_grad = calculate_cm_grad(X, fX, lower_bound=-5.0, upper_bound=5.0)
 
-    
+
     ### LINEAR MODEL FEATURES ###
-    limo = calculate_limo(X, fX, upper_bound=5.0, lower_bound=-5.0)
+    #limo = calculate_limo(X, fX, upper_bound=5.0, lower_bound=-5.0)
 
     ### NEAREST BETTER CLUSTERING ###
     nbc = calculate_nbc(X, fX)
+
 
     ### DISPERSION FEATURES ###
     disp = calculate_dispersion(X, fX)
@@ -138,8 +147,17 @@ def extract_ela_features(seed: int,
     ### PCA FEATURES ###
     pca_features = calculate_pca(X, fX)
 
-    return pd.DataFrame({**ela_meta, **ela_distr, **nbc, **disp, **ic, **pca_features}, index=[0])
 
+    # Use the miscellaneous features
+    fdc = calculate_fitness_distance_correlation(X, fX, problem.optimum.y, minkowski_p=2.0)
+    #grad_features = calculate_gradient_features(problem, dim, lower_bound=-5.0, upper_bound=5.0, seed=seed)
+    #hc_features = calculate_hill_climbing_features(problem, dim, lower_bound=-5.0, upper_bound=5.0, seed=seed)
+    #ls_features = calculate_length_scales_features(problem, dim, lower_bound=-5.0, upper_bound=5.0, seed=seed)
+    #sobol_features = calculate_sobol_indices_features(problem, dim, lower_bound=-5.0, upper_bound=5.0, seed=seed)
+
+    #return pd.DataFrame({**ela_meta, **ela_distr, **ela_level, **nbc, **disp, **ic, **pca_features, **cm_angle, **cm_conv, **cm_grad, **limo}, index=[0])
+    #return pd.DataFrame({**ela_meta, **ela_distr, **ela_level, **nbc, **disp, **ic, **pca_features, **limo}, index=[0])
+    return pd.DataFrame({**ela_meta, **ela_distr, **ela_level, **nbc, **disp, **ic, **pca_features, **fdc}, index=[0])
 
 # ---------------------------------------------------------
 # Worker function for multiprocessing
@@ -152,16 +170,33 @@ def worker_extract_and_save(args):
     X = read_x_samples(x_file)
     fX = read_csv(y_file)["fX"].values
 
-    df = extract_ela_features(seed, X, fX)
+    
 
-    out_dir = base_dir / "ela_features" / obj_type / f"Dimension_{dim}" / f"seed_{seed}" \
+    out_dir = base_dir / "ela_features_2" / obj_type / f"Dimension_{dim}" / f"seed_{seed}" \
               / f"Samples_{n_samples}" / f"f_{func_id}" / f"id_{inst_id}"
+
+    
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    save_csv(df, out_dir / "ela_features.csv")
-    print(f"Saved: {out_dir}")
+    if out_dir.joinpath("ela_features_2.csv").exists():
+        #print(f"Skipping existing: {out_dir}")
+        # Open the existing file to check if it's valid
+        #df = pd.read_csv(out_dir / "ela_features_2.csv")
 
-    return True
+        df = extract_ela_features(seed, X, fX, dim, func_id, inst_id)
+
+        save_csv(df, out_dir / "ela_features_2.csv")
+        print(f"Saved: {out_dir}")
+
+        
+        return True
+    else:
+        df = extract_ela_features(seed, X, fX, dim, func_id, inst_id)
+
+        save_csv(df, out_dir / "ela_features.csv")
+        print(f"Saved: {out_dir}")
+
+        return True
 
 
 # ---------------------------------------------------------
@@ -180,17 +215,23 @@ def main():
     tasks = []
     for key, x_file in x_dict.items():
         if key in y_dict:
-            for (y_file, func_id, inst_id) in y_dict[key]:
-                tasks.append((key, x_file, y_file, func_id, inst_id, base_dir))
+            if key[0] <=40:  # only dimensions up to 40
+                for (y_file, func_id, inst_id) in y_dict[key]:
+                    tasks.append((key, x_file, y_file, func_id, inst_id, base_dir))
 
     print(f"Found {len(tasks)} feature extraction tasks.")
 
     # run multiprocessing
-    n_proc = max(1, 4)
+    #n_proc = max(1, cpu_count()//2 - 1)
+    n_proc = 8
     print(f"Using {n_proc} processes...")
 
-    with Pool(n_proc) as pool:
-        pool.map(worker_extract_and_save, tasks)
+    if n_proc == 1:
+        for task in tasks:
+            worker_extract_and_save(task)
+    else:
+        with Pool(n_proc) as pool:
+            pool.map(worker_extract_and_save, tasks)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,4 @@
 from __future__ import annotations
-from cocoex import Suite,Problem
 import argparse
 import sys
 import numpy as np

@@ -2,6 +2,7 @@ import numpy as np
 from numpy.linalg import eigh, pinv
 from scipy.linalg import sqrtm
 from typing import Optional
+from sklearn.preprocessing import MinMaxScaler
 from sklearn.decomposition import FastICA
 
 class WeightedFastICA(FastICA):
@@ -44,6 +45,9 @@ class WeightedFastICA(FastICA):
         # Initialize sample weights
         self._sample_weights: np.ndarray = None
         self._mean: np.ndarray = None
+
+        # Initialize a scaler for later use
+        self._scaler = MinMaxScaler()
 
     def fit(self, X: np.ndarray, y: Optional[np.ndarray] = None,
             sample_weights: Optional[np.ndarray] = None) -> 'WeightedFastICA':

@@ -1,4 +1,5 @@
 from sklearn.decomposition import PCA as SklearnPCA
+from sklearn.preprocessing import MinMaxScaler
 import numpy as np
 
 class WeightedPCA(SklearnPCA):
@@ -17,6 +18,13 @@ class WeightedPCA(SklearnPCA):
     
     def __init__(self, n_components=None, **kwargs):
         super().__init__(n_components=n_components, **kwargs)
+
+        # Initialize sample weights
+        self._sample_weights: np.ndarray = None
+        self._mean: np.ndarray = None
+
+        # Initialize a scaler for later use
+        self._scaler = MinMaxScaler()
         
     def fit(self, X, y=None, sample_weights=None):
         """
