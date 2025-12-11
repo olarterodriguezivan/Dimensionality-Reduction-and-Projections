@@ -176,9 +176,9 @@ class IsomapWrapper(Isomap):
     def save_model(self, path: str)-> None:
         """Save the entire wrapper (reducer + model + state)."""
         dump(self, path)
-
+    
     @staticmethod
-    def load(path: str) -> 'IsomapWrapper':
+    def load_model(path: str) -> 'IsomapWrapper':
         """Load a wrapper from disk."""
         return load(path)
     

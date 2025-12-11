@@ -137,7 +137,7 @@ class WeightedPCA(SklearnPCA):
         dump(self, path)
 
     @staticmethod
-    def load(path: str) -> 'WeightedPCA':
+    def load_model(path: str) -> 'WeightedPCA':
         """Load a wrapper from disk."""
         return load(path)
         
