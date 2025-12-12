@@ -79,7 +79,7 @@ class WeightedPCA(SklearnPCA):
 
         return super().transform(X_weighted)
     
-    def fit_transform(self, X, y=None, sample_weight=None):
+    def fit_transform(self, X, y=None, sample_weights=None):
         """
         Fit the model and apply dimensionality reduction.
         
@@ -97,7 +97,7 @@ class WeightedPCA(SklearnPCA):
         X_transformed : ndarray of shape (n_samples, n_components)
             Transformed data.
         """
-        self.fit(X, y=y, sample_weight=sample_weight)
+        self.fit(X, y=y, sample_weights=sample_weights)
         return self.transform(X)
 
 

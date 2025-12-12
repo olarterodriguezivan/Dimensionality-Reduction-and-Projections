@@ -2,7 +2,7 @@
 r"""Test PCA with rank-based weighting on BBOB functions."""
 
 import numpy as np
-from dimensionality_reduction import WeightedPCA
+from dimensionality_reduction import ScikitPCAWrapper
 from weighting_premises import get_rank_based_weighting
 from qmc_samplers import get_sampler
 from scipy.stats import qmc
@@ -55,10 +55,10 @@ weights = get_rank_based_weighting(method="logarithmic").compute_weights(values=
                                                                          decay=0.4)
 
 # Initialize Weighted PCA
-weighted_pca = WeightedPCA(n_components=n_components)
+weighted_pca = ScikitPCAWrapper(n_components=n_components)
 
 # Fit and transform the data
-X_reduced = weighted_pca.fit_transform(X_tensor, weights=torch.from_numpy(weights))
+X_reduced = weighted_pca.fit_transform(X_tensor, sample_weights=torch.from_numpy(weights))
 
 print(f"Original shape: {X_tensor.shape}")
 print(f"Reduced shape: {X_reduced.shape}")

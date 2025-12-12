@@ -3,7 +3,7 @@ r"""Test PCA with rank-based weighting on BBOB functions."""
 
 import numpy as np
 from dimensionality_reduction import IvisWrapper
-from weighting_premises import get_rank_based_weighting
+#from weighting_premises import get_rank_based_weighting
 from qmc_samplers import get_sampler
 from scipy.stats import qmc
 from typing import List, Union
@@ -11,7 +11,7 @@ from ioh import get_problem
 
 
 # Define a simple test function
-problem_id = 1  # Sphere function
+problem_id = 21  # Gallagher 101 function
 problem_instance = 1 # Instance ID
 dimension = 40
 
@@ -46,8 +46,8 @@ X = qmc.scale(X, lb, ub)
 y_values = np.array([problem(x) for x in X])
 
 # Get rank-based weighting
-weights = get_rank_based_weighting(method="logarithmic").compute_weights(values=y_values,
-                                                                         decay=0.4)
+#weights = get_rank_based_weighting(method="logarithmic").compute_weights(values=y_values,
+ #                                                                        decay=0.4)
 
 
 # Initialize Weighted PCA
