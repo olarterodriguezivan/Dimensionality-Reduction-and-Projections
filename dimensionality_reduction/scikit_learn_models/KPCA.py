@@ -41,11 +41,11 @@ class WeightedKPCA(KernelPCA):
         # Store the weights
         self._sample_weights = sample_weights
 
-        # Center the data
+         # Center the data
         self._mean = np.mean(X, axis=0)
         X_centered = X - self._mean
 
-        X_weighted = X_centered * np.diag(self._sample_weights)
+        X_weighted = X_centered * self._sample_weights[:, None]
 
         return super().fit(X_weighted, y)
     
@@ -68,7 +68,7 @@ class WeightedKPCA(KernelPCA):
         # Uncenter the data
         X_centered = X - self._mean
 
-        X_weighted = X_centered * np.diag(self._sample_weights)
+        X_weighted = X_centered * self._sample_weights[:, None]
 
         return super().transform(X_weighted)
     

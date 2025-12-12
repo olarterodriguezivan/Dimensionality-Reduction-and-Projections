@@ -70,7 +70,7 @@ class WeightedFastICA(FastICA):
         X_centered = X - self._mean
         
         # Apply weights
-        X_weighted = X_centered * np.diag(self._sample_weights)
+        X_weighted = X_centered * self._sample_weights[:, None]
 
         # Fit the FastICA model on weighted data
         super().fit(X_weighted, y)
@@ -82,18 +82,13 @@ class WeightedFastICA(FastICA):
         X_centered = X - self._mean
         
         # Apply weights
-        X_weighted = X_centered * np.diag(self._sample_weights)
+        X_weighted = X_centered * self._sample_weights[:, None]
         
         return super().transform(X_weighted)
     
     def fit_transform(self, X, y = None, sample_weights: Optional[np.ndarray] = None) -> np.ndarray:
         return self.fit(X, y, sample_weights=sample_weights).transform(X)
     
-
-    # ---------------------------------------
-    # Saving and loading methods
-    # ---------------------------------------
-
     # ---------------------------------------
     # Saving and loading methods
     # ---------------------------------------

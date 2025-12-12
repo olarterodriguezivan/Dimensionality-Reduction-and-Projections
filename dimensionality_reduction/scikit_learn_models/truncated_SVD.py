@@ -82,7 +82,7 @@ class WeightedTruncatedSVD(TruncatedSVD):
         self._mean = np.mean(X, axis=0)
         X_centered = X - self._mean
 
-        X_weighted = X_centered * np.diag(self._sample_weights)
+        X_weighted = X_centered * self._sample_weights[:, None]
 
         return super().fit(X_weighted, y)
     
@@ -106,7 +106,7 @@ class WeightedTruncatedSVD(TruncatedSVD):
         X_centered = X - self._mean
 
         # Scale the data with sample weights
-        X_weighted = X_centered * np.diag(self._sample_weights)
+        X_weighted = X_centered * self._sample_weights[:, None]
 
         return super().transform(X_weighted)
     
@@ -147,14 +147,14 @@ class WeightedTruncatedSVD(TruncatedSVD):
         """
         X = np.asarray(X)
 
-        # Inverse transform to weighted space
-        X_weighted = super().inverse_transform(X)
+        # Perform the inverse transformation
+        X_reconstructed = super().inverse_transform(X)
 
         # Unscale the data with sample weights
-        X_centered = X_weighted * np.diag(np.power(self._sample_weights, -1))
+        X_unscaled = X_reconstructed * (self._sample_weights ** -1)[:, None]
 
-        # Uncenter the data
-        X_original = X_centered + self._mean
+        # Re-add the mean
+        X_original = X_unscaled + self._mean
 
         return X_original
     

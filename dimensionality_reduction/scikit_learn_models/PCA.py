@@ -62,7 +62,7 @@ class WeightedPCA(SklearnPCA):
         self._mean = np.mean(X, axis=0)
         X_centered = X - self._mean
 
-        X_weighted = X_centered * np.diag(self._sample_weights)
+        X_weighted = X_centered * self._sample_weights[:, None]
 
         return super().fit(X_weighted, y)
     
@@ -75,7 +75,7 @@ class WeightedPCA(SklearnPCA):
         X_centered = X - self._mean
 
         # Scale the data with sample weights
-        X_weighted = X_centered * np.diag(self._sample_weights)
+        X_weighted = X_centered * self._sample_weights[:, None]
 
         return super().transform(X_weighted)
     
@@ -121,7 +121,7 @@ class WeightedPCA(SklearnPCA):
         X_reconstructed = super().inverse_transform(X)
 
         # Unscale the data with sample weights
-        X_unscaled = X_reconstructed * np.diag(np.power(self._sample_weights,-1))
+        X_unscaled = X_reconstructed * (self._sample_weights ** -1)[:, None]
 
         # Re-add the mean
         X_original = X_unscaled + self._mean

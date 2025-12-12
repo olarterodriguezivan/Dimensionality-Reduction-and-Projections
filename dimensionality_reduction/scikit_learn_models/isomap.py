@@ -107,9 +107,9 @@ class IsomapWrapper(Isomap):
         self._mean = np.mean(X, axis=0)
         X_centered = X - self._mean
 
-        X_scaled = X_centered * np.diag(sample_weights)
+        X_weighted = X_centered * self._sample_weights[:, None]
 
-        return super().fit(X_scaled, y)
+        return super().fit(X_weighted, y)
     
     def transform(self, X: np.ndarray) -> np.ndarray:
         """
@@ -131,9 +131,9 @@ class IsomapWrapper(Isomap):
         # Center the data
         X_centered = X - self._mean
 
-        X_scaled = X_centered * np.diag(self._sample_weights)
+        X_weighted = X_centered * self._sample_weights[:, None]
 
-        return super().transform(X_scaled)
+        return super().transform(X_weighted)
     
     def fit_transform(self, 
                       X: np.ndarray,
@@ -163,11 +163,11 @@ class IsomapWrapper(Isomap):
         self._mean = np.mean(X, axis=0)
         X_centered = X - self._mean
 
-        X_scaled = X_centered * sample_weights.reshape(-1, 1)
+        X_weighted = X_centered * self._sample_weights[:, None]
 
         self.is_fitted = True
 
-        return super().fit_transform(X_scaled)
+        return super().fit_transform(X_weighted)
     
     # ---------------------------------------
     # Saving and loading methods
