@@ -2,8 +2,9 @@
 r"""Test PCA with rank-based weighting on BBOB functions."""
 
 import numpy as np
-from dimensionality_reduction import IvisWrapper
+#from dimensionality_reduction import ParametricUMAPWrapper
 #from weighting_premises import get_rank_based_weighting
+from umap.parametric_umap import ParametricUMAP
 from qmc_samplers import get_sampler
 from scipy.stats import qmc
 from typing import List, Union
@@ -11,11 +12,11 @@ from ioh import get_problem
 
 
 # Define a simple test function
-problem_id = 13  # Gallagher 101 function
+problem_id = 1  # Sphere function
 problem_instance = 1 # Instance ID
-dimension = 40
+dimension = 60
 
-reduction_percent = 0.25  # Reduce to 50% of original dimensions
+reduction_percent = 0.2 # Reduce to 50% of original dimensions
 #n_components = int(dimension * reduction_percent)
 n_components = 2  # Target number of components
 
@@ -52,40 +53,28 @@ y_values = np.array([problem(x) for x in X])
 
 
 # Initialize Weighted PCA
-ivis_model =IvisWrapper(n_components=n_components,
-                        k=50,
-                        distance='euclidean',
-                        epochs=1000,
-                        n_epochs_without_progress=50,
-                        model='szubert',
-                        supervision_metric="mean_squared_error",
-                        verbose=True)
+umap_model = ParametricUMAP(batch_size=64,
+                            n_neighbors=15,
+                            min_dist=0.1,
+                            n_components=n_components,
+                            random_state=random_seed)
 
 # Fit and transform the data
 #ivis_model.fit(X,Y=y_values)
-ivis_model.fit(X, y=y_values)
-X_reduced:np.ndarray = ivis_model.transform(X)
+umap_model.fit(X, y=y_values)
+X_reduced:np.ndarray = umap_model.transform(X)
 
-print(f"Reduced shape: {X_reduced.shape}")
+print(f"Reduced shape: {X_reduced.shape}", 
+      umap_model.get_params())
 
-
-if n_components==2:
+if n_components == 2:
     import matplotlib.pyplot as plt
 
-    plt.scatter(X_reduced[:,0], X_reduced[:,1], c=y_values, cmap='viridis', s=5)
-    plt.colorbar(label='Function Value')
-    plt.title('IVIS Dimensionality Reduction with Rank-Based Weighting')
-    plt.xlabel('Component 1')
-    plt.ylabel('Component 2')
+    plt.figure(figsize=(8, 6))
+    scatter = plt.scatter(X_reduced[:, 0], X_reduced[:, 1], c=y_values, cmap='viridis', s=5)
+    plt.colorbar(scatter, label='Function Value')
+    plt.title('UMAP Dimensionality Reduction of BBOB Function Samples')
+    plt.xlabel('UMAP Component 1')
+    plt.ylabel('UMAP Component 2')
+    plt.grid(True)
     plt.show()
-
-
-
-
-
-
-
-
-
-
-

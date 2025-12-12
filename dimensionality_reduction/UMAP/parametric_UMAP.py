@@ -1,9 +1,7 @@
 import numpy as np
 from umap.parametric_umap import ParametricUMAP, load_ParametricUMAP
 from dimensionality_reduction.UMAP.non_parametric_UMAP import DEFAULT_TARGET_METRICS
-from typing import Optional
-from joblib import load, dump
-#from keras.models import load_model, save_model
+
 
 class ParametricUMAPTransformer(ParametricUMAP):
     """
@@ -11,29 +9,29 @@ class ParametricUMAPTransformer(ParametricUMAP):
     """
     
     def __init__(self,
-                 batch_size=128,
-                 dims=2,
-                 encoder=None,
-                 decoder=None,
-                 parametric_reconstruction=False,
-                 parametric_reconstruction_loss_weight=0.0,
-                 parametric_reconstruction_loss_fcn=None,
-                 autoencoder_loss = None,
-                 reconstruction_validation = None,
-                 global_correlation_loss_weight = 0.0,
-                 landmark_loss_weight = 0.0,
-                 landmark_loss_fcn = None,
-                    n_epochs=None,
-                    negative_sample_rate=5,
-                    learning_rate=1.0,
-                    repulsion_strength=1.0,
-                    target_metric="l1",
-                    target_weight=0.5,
-                    transform_seed=42,
-                    **kwargs):
+        batch_size=64,
+        n_neighbors=15,
+        min_dist=0.1,
+        dims=None,
+        encoder=None,
+        decoder=None,
+        parametric_reconstruction=False,
+        parametric_reconstruction_loss_fcn=None,
+        parametric_reconstruction_loss_weight=1.0,
+        autoencoder_loss=False,
+        reconstruction_validation=None,
+        global_correlation_loss_weight=0,
+        landmark_loss_fn=None,
+        landmark_loss_weight=1.0,
+        target_metric: str = 'l1',
+        target_metric_kwds: dict = {},
+        keras_fit_kwargs={},
+        n_epochs: int = 1000,
+        **kwargs):
+    
         
-        if target_metric not in DEFAULT_TARGET_METRICS:
-            raise ValueError(f"target_metric must be one of {DEFAULT_TARGET_METRICS}, got {target_metric}")
+        assert target_metric in DEFAULT_TARGET_METRICS, \
+            f"target_metric must be one of {list(DEFAULT_TARGET_METRICS.keys())}, got {target_metric}."
         
         super().__init__(
             batch_size=batch_size,
@@ -47,14 +45,13 @@ class ParametricUMAPTransformer(ParametricUMAP):
             reconstruction_validation=reconstruction_validation,
             global_correlation_loss_weight=global_correlation_loss_weight,
             landmark_loss_weight=landmark_loss_weight,
-            landmark_loss_fcn=landmark_loss_fcn,
+            landmark_loss_fn=landmark_loss_fn,
             n_epochs=n_epochs,
-            negative_sample_rate=negative_sample_rate,
-            learning_rate=learning_rate,
-            repulsion_strength=repulsion_strength,
             target_metric=target_metric,
-            target_weight=target_weight,
-            transform_seed=transform_seed,
+            target_metric_kwds=target_metric_kwds,
+            keras_fit_kwargs=keras_fit_kwargs,
+            n_neighbors=n_neighbors,
+            min_dist=min_dist,
             **kwargs
         )
 

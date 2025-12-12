@@ -27,3 +27,7 @@ LLEWrapper = _safe_import(".scikit_learn_models.lle", "LLEWrapper")
 
 # --- IVIS model ---
 IvisWrapper = _safe_import(".ivis.ivis", "IvisWrapper")
+
+# --- UMAP model ---
+UMAPWrapper = _safe_import(".UMAP.non_parametric_UMAP", "NonParametricUMAP")
+ParametricUMAPWrapper = _safe_import(".UMAP.parametric_UMAP", "ParametricUMAPTransformer")

@@ -117,7 +117,7 @@ class IvisWrapper(Ivis):
         
     def fit(self, 
             X: np.ndarray, 
-            Y:np.ndarray) -> 'IvisWrapper':
+            y:np.ndarray) -> 'IvisWrapper':
         """
         Fit the ivis model.
         
@@ -125,7 +125,7 @@ class IvisWrapper(Ivis):
         ----------
         X : array-like, shape (n_samples, n_features)
             Training data.
-        Y : array-like, shape (n_samples,)
+        y : array-like, shape (n_samples,)
             Target values for supervised dimensionality reduction.
         Returns
         -------
@@ -134,14 +134,14 @@ class IvisWrapper(Ivis):
         """
 
         assert len(X.shape) == 2, "X must be a 2D array."
-        assert Y is None or len(Y.shape) == 1, "Y must be a 1D array or None."
+        assert y is None or len(y.shape) == 1, "Y must be a 1D array or None."
 
         # Compute mean for centering
         self._mean = np.mean(X, axis=0)
 
         X_centered = X - self._mean
         
-        super().fit(X_centered,Y)
+        super().fit(X_centered,y)
 
         return self
         
@@ -168,7 +168,7 @@ class IvisWrapper(Ivis):
         
     def fit_transform(self, 
                       X: np.ndarray, 
-                      Y: np.ndarray) -> np.ndarray:
+                      y: np.ndarray) -> np.ndarray:
         """
         Fit the model and transform the data.
         
@@ -176,7 +176,7 @@ class IvisWrapper(Ivis):
         ---------
         X : array-like, shape (n_samples, n_features)
             Training data.
-        Y : array-like, shape (n_samples,)
+        y : array-like, shape (n_samples,)
             Target values for supervised dimensionality reduction.
             
         Returns
@@ -184,7 +184,7 @@ class IvisWrapper(Ivis):
         X_transformed : array-like, shape (n_samples, embedding_dims)
             Transformed data in the embedding space.
         """
-        return self.fit(X, Y).transform(X)
+        return self.fit(X, y).transform(X)
     
 
     def save_model(self, folder_path: str) -> None:
