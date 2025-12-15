@@ -2,6 +2,7 @@ from sklearn.manifold import Isomap
 import numpy as np
 from typing import Optional, Union
 from joblib import load, dump
+from pathlib import Path
 
 class IsomapWrapper(Isomap):
     """
@@ -169,12 +170,42 @@ class IsomapWrapper(Isomap):
 
         return super().fit_transform(X_weighted)
     
+    def _get_state(self):
+        return {
+            "init_params": self.get_params(deep=False),
+            "_mean": self._mean.tolist(),
+            "_sample_weights": self._sample_weights.tolist(),
+            "embedding_": self.embedding_.tolist(),
+            "dist_matrix_": self.dist_matrix_.tolist(),
+            "nbrs_": self.nbrs_,
+            "is_fitted": self.is_fitted,
+        }
+
+    def _set_state(self, state):
+        self._mean = np.array(state["_mean"])
+        self._sample_weights = np.array(state["_sample_weights"])
+        self.embedding_ = np.array(state["embedding_"])
+        self.dist_matrix_ = np.array(state["dist_matrix_"])
+        self.nbrs_ = state["nbrs_"]
+        self.is_fitted = state["is_fitted"]
+    
     # ---------------------------------------
     # Saving and loading methods
     # ---------------------------------------
 
-    def save_model(self, path: str)-> None:
+    def save_model(self, path: Union[str, Path],
+                   overwrite: bool = True)-> None:
         """Save the entire wrapper (reducer + model + state)."""
+
+        # Ensure path is a Path object
+        path = Path(path)
+        if path.exists() and not overwrite:
+            raise FileExistsError(f"The file {path} already exists and overwrite is set to False.")
+        
+        # Make sure the parent directory exists
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Save the model
         dump(self, path)
     
     @staticmethod

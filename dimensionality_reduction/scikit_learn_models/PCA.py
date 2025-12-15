@@ -1,6 +1,8 @@
 from sklearn.decomposition import PCA as SklearnPCA
 from sklearn.preprocessing import MinMaxScaler
 from joblib import load, dump
+from typing import Union, Optional
+from pathlib import Path
 import numpy as np
 
 class WeightedPCA(SklearnPCA):
@@ -132,14 +134,90 @@ class WeightedPCA(SklearnPCA):
     # Saving and loading methods
     # ---------------------------------------
 
-    def save_model(self, path: str)-> None:
-        """Save the entire wrapper (reducer + model + state)."""
-        dump(self, path)
+    def save_model(self, 
+                   path: Union[str, Path], 
+                   overwrite: Optional[bool] = False) -> None:
+        """
+        Save model parameters and learned state explicitly.
+
+        Parameters
+        ----------
+        path : str or Path
+            File path where the model will be saved.
+        overwrite : bool, default=False
+            Whether to overwrite an existing file.
+        """
+        path = Path(path)
+
+        # Create parent directories if needed
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        if path.exists() and not overwrite:
+            raise FileExistsError(
+                f"File '{path}' already exists. "
+                "Use overwrite=True to overwrite."
+            )
+
+        state = {
+            # constructor parameters
+            "init_params": {
+                "n_components": self.n_components,
+                **self.get_params(deep=False),
+            },
+
+            # learned sklearn state
+            "components_": self.components_.tolist(),
+            "explained_variance_": self.explained_variance_.tolist(),
+            "explained_variance_ratio_": self.explained_variance_ratio_.tolist(),
+            "singular_values_": self.singular_values_.tolist(),
+            "n_features_in_": self.n_features_in_,
+
+            # custom state
+            "_mean": self._mean.tolist(),
+            "_sample_weights": self._sample_weights.tolist(),
+        }
+
+        dump(state, path)
+
 
     @staticmethod
-    def load_model(path: str) -> 'WeightedPCA':
-        """Load a wrapper from disk."""
-        return load(path)
+    def load_model(path: Union[str, Path]) -> "WeightedPCA":
+        """
+        Load model parameters and learned state explicitly.
+
+        Parameters
+        ----------
+        path : str or Path
+            File path where the model is stored.
+
+        Returns
+        -------
+        WeightedPCA
+            Reconstructed PCA model.
+        """
+        path = Path(path)
+
+        if not path.exists():
+            raise FileNotFoundError(f"Model file '{path}' does not exist.")
+
+        state = load(path)
+
+        # Reconstruct model
+        init_params = state["init_params"]
+        model = WeightedPCA(**init_params)
+
+        # Restore learned sklearn attributes
+        model.components_ = np.array(state["components_"])
+        model.explained_variance_ = np.array(state["explained_variance_"])
+        model.explained_variance_ratio_ = np.array(state["explained_variance_ratio_"])
+        model.singular_values_ = np.array(state["singular_values_"])
+        model.n_features_in_ = state["n_features_in_"]
+
+        # Restore custom state
+        model._mean = np.array(state["_mean"])
+        model._sample_weights = np.array(state["_sample_weights"])
+
+        return model
         
 
     

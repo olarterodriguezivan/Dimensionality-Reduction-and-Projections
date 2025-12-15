@@ -1,7 +1,8 @@
 import numpy as np
 from sklearn.manifold import LocallyLinearEmbedding
 from joblib import load, dump
-from typing import Optional
+from typing import Optional, Union
+from pathlib import Path
 
 
 class LLEWrapper(LocallyLinearEmbedding):
@@ -97,16 +98,44 @@ class LLEWrapper(LocallyLinearEmbedding):
 
         return super().fit_transform(X_weighted, y)
     
+    def _get_state(self):
+        return {
+            "init_params": self.get_params(deep=False),
+            "_mean": self._mean.tolist(),
+            "_sample_weights": self._sample_weights.tolist(),
+            "embedding_": self.embedding_.tolist(),
+            "reconstruction_error_": self.reconstruction_error_,
+            "nbrs_": self.nbrs_,
+        }
+
+    def _set_state(self, state):
+        self._mean = np.array(state["_mean"])
+        self._sample_weights = np.array(state["_sample_weights"])
+        self.embedding_ = np.array(state["embedding_"])
+        self.reconstruction_error_ = state["reconstruction_error_"]
+        self.nbrs_ = state["nbrs_"]
+    
     # ---------------------------------------
     # Saving and loading methods
     # ---------------------------------------
 
-    def save_model(self, path: str)-> None:
+    def save_model(self, path: Union[str, Path],
+                   overwrite: bool = True)-> None:
         """Save the entire wrapper (reducer + model + state)."""
+
+        # Ensure path is a Path object
+        path = Path(path)
+        if path.exists() and not overwrite:
+            raise FileExistsError(f"The file {path} already exists and overwrite is set to False.")
+        
+        # Make sure the parent directory exists
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Save the model
         dump(self, path)
 
     @staticmethod
-    def load(path: str) -> 'LLEWrapper':
+    def load_model(path: Union[str, Path]) -> 'LLEWrapper':
         """Load a wrapper from disk."""
         return load(path)
     

@@ -1,6 +1,7 @@
 import numpy as np
 from umap.parametric_umap import ParametricUMAP, load_ParametricUMAP
 from dimensionality_reduction.UMAP.non_parametric_UMAP import DEFAULT_TARGET_METRICS
+from pathlib import Path
 
 
 class ParametricUMAPTransformer(ParametricUMAP):
@@ -57,7 +58,10 @@ class ParametricUMAPTransformer(ParametricUMAP):
 
             
     
-    def fit(self, X, y, **kwargs):
+    def fit(self, X, y, 
+            precomputed_distances=None, 
+            landmark_positions=None, 
+            **kwargs):
         """
         Fit the Parametric UMAP model to the data.
         
@@ -76,7 +80,10 @@ class ParametricUMAPTransformer(ParametricUMAP):
             Returns the instance itself.
         """
 
-        return super().fit(X, y, **kwargs)
+        return super().fit(X, y, 
+                           precomputed_distances=precomputed_distances, 
+                           landmark_positions=landmark_positions, 
+                           **kwargs)
     
     def transform(self, X):
         """
@@ -92,9 +99,9 @@ class ParametricUMAPTransformer(ParametricUMAP):
         X_transformed : array-like of shape (n_samples, n_components)
             Transformed data in the embedding space.
         """
-        return super().transform(X)
+        return super().transform(X, self.batch_size)
     
-    def fit_transform(self, X, y=None, precomputed_distances=None, landmark_positions=None, **kwargs):
+    def fit_transform(self, X, y, precomputed_distances=None, landmark_positions=None, **kwargs):
         """
         Fit the model to the data and transform it in one step.
         
@@ -135,35 +142,59 @@ class ParametricUMAPTransformer(ParametricUMAP):
         return super().inverse_transform(X)
     
 
-    def save_model(self, folder_path: str) -> None:
-        """
-        This is just a wrapper to save both the UMAP model and the Keras models.
-        Parameters
-        ----------
-        folder_path : str
-            Path to the folder where the model will be saved.
-        """
+    # This is the get_config method from the base class
+    def get_config(self):
+        # Start from an EMPTY config, not super()
+        return {
+            "batch_size": self.batch_size,
+            "n_neighbors": self.n_neighbors,
+            "min_dist": self.min_dist,
+            "n_epochs": self.n_epochs,
+            "target_metric": self.target_metric,
+            "target_metric_kwds": self.target_metric_kwds,
+        }
 
-        super().save(folder_path,
-                     verbose=True,
-                       save_format="h5")
+
+    
+
+    def save_model(self,
+                   folder_path: str,
+                   overwrite: bool = True,
+                   exclude_raw_data: bool = False) -> None:
+
+        folder_path:Path = Path(folder_path).expanduser().resolve()
+
+        if folder_path.exists():
+            if not overwrite:
+                raise FileExistsError(
+                    f"The folder {folder_path} already exists and overwrite=False."
+                )
+        else:
+            folder_path.mkdir(parents=True, exist_ok=True)
+
+        super().save(
+            save_location=folder_path.as_posix(),
+            verbose=True,
+            exclude_raw_data=exclude_raw_data,
+        )
 
 
-    @staticmethod
-    def load_model(folder_path: str) -> 'ParametricUMAPTransformer':
-        """
-        Load a ParametricUMAPTransformer model from disk.
-        
-        Parameters
-        ----------
-        folder_path : str
-            Path to the folder where the model is saved.
-            
-        Returns
-        -------
-        model : ParametricUMAPTransformer
-            The loaded ParametricUMAPTransformer model.
-        """
-        return load_ParametricUMAP(save_location=folder_path,
-                                   verbose=True)
+
+    @classmethod
+    def load_model(cls, folder_path: str) -> "ParametricUMAPTransformer":
+        folder_path = Path(folder_path).expanduser().resolve()
+
+        base_model = load_ParametricUMAP(
+            save_location=folder_path.as_posix(),
+            verbose=True,
+        )
+
+        # Create an uninitialized instance
+        obj = cls.__new__(cls)
+
+        # Copy internal state
+        obj.__dict__.update(base_model.__dict__)
+
+        return obj
+
         

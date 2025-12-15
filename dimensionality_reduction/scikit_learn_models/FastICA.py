@@ -2,6 +2,7 @@ import numpy as np
 from numpy.linalg import eigh, pinv
 from scipy.linalg import sqrtm
 from joblib import load, dump
+from pathlib import Path
 from typing import Optional, Union
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.decomposition import FastICA
@@ -91,12 +92,42 @@ class WeightedFastICA(FastICA):
     def fit_transform(self, X, y = None, sample_weights: Optional[np.ndarray] = None) -> np.ndarray:
         return self.fit(X, y, sample_weights=sample_weights).transform(X)
     
+    def _get_state(self):
+        return {
+            "init_params": self.get_params(deep=False),
+            "_mean": self._mean.tolist(),
+            "_sample_weights": self._sample_weights.tolist(),
+            "components_": self.components_.tolist(),
+            "mixing_": self.mixing_.tolist(),
+            "unmixing_": self.unmixing_.tolist(),
+            "n_iter_": self.n_iter_,
+        }
+
+    def _set_state(self, state):
+        self._mean = np.array(state["_mean"])
+        self._sample_weights = np.array(state["_sample_weights"])
+        self.components_ = np.array(state["components_"])
+        self.mixing_ = np.array(state["mixing_"])
+        self.unmixing_ = np.array(state["unmixing_"])
+        self.n_iter_ = state["n_iter_"]
+
     # ---------------------------------------
     # Saving and loading methods
     # ---------------------------------------
 
-    def save_model(self, path: str)-> None:
+    def save_model(self, path: Union[str, Path],
+                   overwrite: bool = True)-> None:
         """Save the entire wrapper (reducer + model + state)."""
+
+        # Ensure path is a Path object
+        path = Path(path)
+        if path.exists() and not overwrite:
+            raise FileExistsError(f"The file {path} already exists and overwrite is set to False.")
+        
+        # Make sure the parent directory exists
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Save the model
         dump(self, path)
 
     @staticmethod

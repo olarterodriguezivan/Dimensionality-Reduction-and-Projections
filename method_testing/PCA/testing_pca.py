@@ -64,7 +64,7 @@ X_reduced = weighted_pca.fit_transform(X, sample_weights=weights)
 print(f"Reduced shape: {X_reduced.shape}")
 
 # Perform the inverse transform
-X_reconstructed = weighted_pca.inverse_transform(X_reduced)
+#X_reconstructed = weighted_pca.inverse_transform(X_reduced)
 
 # Compute reconstruction error
 #reconstruction_error = (X_tensor - X_reconstructed).norm()
@@ -73,6 +73,12 @@ X_reconstructed = weighted_pca.inverse_transform(X_reduced)
 # Verify the reduced dimensions
 assert X_reduced.shape[1] == n_components, "Dimensionality reduction did not yield expected number of components."
 print("Dimensionality reduction successful with rank-based weighting.")
+
+# Save the model
+weighted_pca.save_model(path="models/weighted_pca/pca_bbob9_model.joblib", 
+                      overwrite=True)
+
+weighted_pca_loaded = ScikitPCAWrapper.load_model(path="models/weighted_pca/pca_bbob9_model.joblib")
 
 
 if n_components == 2:

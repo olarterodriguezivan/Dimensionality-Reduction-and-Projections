@@ -1,5 +1,7 @@
 import numpy as np
 from sklearn.decomposition import KernelPCA
+from pathlib import Path
+from typing import Optional, Union
 from joblib import load, dump
 
 class WeightedKPCA(KernelPCA):
@@ -118,16 +120,44 @@ class WeightedKPCA(KernelPCA):
         # Inverse transform is not straightforward for KernelPCA.
         # This is a placeholder implementation and may not yield accurate results.
         raise NotImplementedError("Inverse transform is not implemented for 'this' WeightedKPCA.")
-    
+
+    def _get_state(self):
+        return {
+            "init_params": self.get_params(deep=False),
+            "_mean": self._mean.tolist(),
+            "_sample_weights": self._sample_weights.tolist(),
+            "alphas_": self.alphas_.tolist(),
+            "lambdas_": self.lambdas_.tolist(),
+            "X_fit_": self.X_fit_.tolist(),
+        }
+
+    def _set_state(self, state):
+        self._mean = np.array(state["_mean"])
+        self._sample_weights = np.array(state["_sample_weights"])
+        self.alphas_ = np.array(state["alphas_"])
+        self.lambdas_ = np.array(state["lambdas_"])
+        self.X_fit_ = np.array(state["X_fit_"])
+
     # ---------------------------------------
     # Saving and loading methods
     # ---------------------------------------
 
-    def save_model(self, path: str)-> None:
+    def save_model(self, path: Union[str, Path],
+                   overwrite: bool = True)-> None:
         """Save the entire wrapper (reducer + model + state)."""
+
+        # Ensure path is a Path object
+        path = Path(path)
+        if path.exists() and not overwrite:
+            raise FileExistsError(f"The file {path} already exists and overwrite is set to False.")
+        
+        # Make sure the parent directory exists
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Save the model
         dump(self, path)
 
     @staticmethod
-    def load(path: str) -> 'WeightedKPCA':
+    def load_model(path: Union[str, Path]) -> 'WeightedKPCA':
         """Load a wrapper from disk."""
         return load(path)

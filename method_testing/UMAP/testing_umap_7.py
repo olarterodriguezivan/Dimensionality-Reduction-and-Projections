@@ -2,7 +2,7 @@
 r"""Test PCA with rank-based weighting on BBOB functions."""
 
 import numpy as np
-#from dimensionality_reduction import ParametricUMAPWrapper
+from dimensionality_reduction import ParametricUMAPWrapper
 #from weighting_premises import get_rank_based_weighting
 
 from qmc_samplers import get_sampler
@@ -17,7 +17,7 @@ from ioh import get_problem
 
 #tf.debugging.enable_check_numerics()
 
-from umap.parametric_umap import ParametricUMAP
+#rom umap.parametric_umap import ParametricUMAP
 
 # Define a simple test functionan
 problem_id = 24  # Sphere function
@@ -61,7 +61,7 @@ y_values = np.array([problem(x) for x in X])
 
 
 # Initialize Weighted PCA
-umap_model = ParametricUMAP(batch_size=64,
+umap_model = ParametricUMAPWrapper(batch_size=64,
                             n_neighbors=15,
                             min_dist=0.1,
                             n_components=n_components,
@@ -72,6 +72,11 @@ umap_model = ParametricUMAP(batch_size=64,
 # Fit and transform the data
 #ivis_model.fit(X,Y=y_values)
 X_reduced = umap_model.fit_transform(X, y=y_values)
+
+# Save the model
+umap_model.save_model(folder_path="models/parametric_umap/umap_bbob24_model", 
+                      overwrite=True,
+                      exclude_raw_data=True)
 
 print(f"Reduced shape: {X_reduced.shape}", 
       umap_model.get_params())

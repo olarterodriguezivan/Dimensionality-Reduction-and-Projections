@@ -68,6 +68,11 @@ X_reduced = weighted_pca.fit_transform(X, sample_weights=weights)
 
 print(f"Reduced shape: {X_reduced.shape}")
 
+# Save the model or results as needed
+weighted_pca.save_model("models/weighted_kpca/weighted_kpca_model.joblib")
+
+# Load the model
+loaded_weighted_pca = ScikitKPCAWrapper.load_model("models/weighted_kpca/weighted_kpca_model.joblib")
 
 if n_components == 2:
     import matplotlib.pyplot as plt
