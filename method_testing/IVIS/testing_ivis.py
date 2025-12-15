@@ -13,7 +13,7 @@ from ioh import get_problem
 print("Is the model supervised?:", is_supervised_model(IvisWrapper))
 
 # Define a simple test function
-problem_id = 12 # Gallagher 101 function
+problem_id = 1 # Gallagher 101 function
 problem_instance = 1 # Instance ID
 dimension = 20
 
@@ -69,6 +69,17 @@ ivis_model.fit(X, y=y_values)
 X_reduced:np.ndarray = ivis_model.transform(X)
 
 print(f"Reduced shape: {X_reduced.shape}")
+
+# Save the model
+ivis_model.save_model("models/ivis")
+
+# Load the model
+loaded_model= IvisWrapper()
+loaded_model.load_model("models/ivis")
+
+
+# Transform data using the loaded model
+X_reduced_loaded = loaded_model.transform(X)
 
 
 if n_components==2:

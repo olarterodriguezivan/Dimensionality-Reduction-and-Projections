@@ -13,7 +13,7 @@ from ioh import get_problem
 # Define a simple test function
 problem_id = 18 # Sphere function
 problem_instance = 1 # Instance ID
-dimension = 60
+dimension = 20
 
 reduction_percent = 0.2 # Reduce to 50% of original dimensions
 #n_components = int(dimension * reduction_percent)
@@ -57,7 +57,7 @@ umap_model = UMAPWrapper(n_components=n_components,
                         min_dist=0.1,
                         metric='euclidean',
                         random_state=random_seed,
-                        n_epochs=5000,
+                        n_epochs=100,
                         learning_rate=0.8,
                         init='spectral',
                         verbose=True)
@@ -66,6 +66,13 @@ umap_model = UMAPWrapper(n_components=n_components,
 #ivis_model.fit(X,Y=y_values)
 umap_model.fit(X, y=y_values)
 X_reduced:np.ndarray = umap_model.transform(X)
+
+
+# Save the model
+umap_model.save_model("models/non_parametric_umap/umap_model.joblib")
+
+
+loaded_umap_model = UMAPWrapper.load_model("models/non_parametric_umap/umap_model.joblib")
 
 print(f"Reduced shape: {X_reduced.shape}", 
       umap_model.get_params())

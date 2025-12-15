@@ -1,9 +1,11 @@
+from bz2 import compress
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils.validation import check_X_y, check_array
 import numpy as np
 import umap
-from typing import Optional
+from typing import Optional, Union
 from joblib import load, dump
+from pathlib import Path
 
 # CONSTANTS
 DEFAULT_TARGET_METRICS = {"l1", "l2"}
@@ -262,19 +264,23 @@ class NonParametricUMAP(umap.UMAP):
     
     # Saving and loading methods
     # ---------------------------------------
-    def save_model(self, path: str) -> None:
-        """
-        Save the entire NonParametricUMAP model to disk.
-        
-        Parameters:
-        -----------
-        path : str
-            Path to the file where the model will be saved.
-        """
-        dump(self, path)
+    def save_model(
+            self,
+            path: Union[str, Path],
+            overwrite: bool = True,
+            compress: Optional[Union[int, tuple]] = 3,) -> None:
+
+        path = Path(path).expanduser().resolve()
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        if path.exists() and not overwrite:
+            raise FileExistsError(f"{path} already exists and overwrite=False")
+
+        dump(self, path, compress=compress)
+
     
     @staticmethod
-    def load(path: str) -> 'NonParametricUMAP':
+    def load_model(path: str) -> 'NonParametricUMAP':
         """
         Load a NonParametricUMAP model from disk.
         

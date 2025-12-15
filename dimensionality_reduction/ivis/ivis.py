@@ -96,6 +96,27 @@ class IvisWrapper(Ivis):
         if model not in ['maaten', 'hinton', 'szubert']:
             raise ValueError("model must be one of ['maaten', 'hinton', 'szubert']")
         
+         # Store init parameters for serialization
+        self._init_params = dict(
+            n_components=n_components,
+            k=k,
+            distance=distance,
+            batch_size=batch_size,
+            epochs=epochs,
+            n_epochs_without_progress=n_epochs_without_progress,
+            knn_distance_metric=knn_distance_metric,
+            n_trees=n_trees,
+            search_k=search_k,
+            precompute=precompute,
+            model=model,
+            supervision_metric=supervision_metric,
+            supervision_weight=supervision_weight,
+            annoy_index_path=annoy_index_path,
+            build_index_on_disk=build_index_on_disk,
+            verbose=verbose,
+            **kwargs
+        )
+        
 
         super().__init__(
             embedding_dims=n_components,
@@ -138,12 +159,9 @@ class IvisWrapper(Ivis):
         assert len(X.shape) == 2, "X must be a 2D array."
         assert y is None or len(y.shape) == 1, "Y must be a 1D array or None."
 
-        # Compute mean for centering
-        self._mean = np.mean(X, axis=0)
-
-        X_centered = X - self._mean
+    
         
-        super().fit(X_centered,y)
+        super().fit(X,y)
 
         return self
         
@@ -162,11 +180,9 @@ class IvisWrapper(Ivis):
             Transformed data in the embedding space.
         """
 
-        # Center data
-        X_mod = X - self._mean
-
         # Return transformed data
-        return super().transform(X_mod)
+        return super().transform(X)
+    
         
     def fit_transform(self, 
                       X: np.ndarray, 
@@ -188,8 +204,37 @@ class IvisWrapper(Ivis):
         """
         return self.fit(X, y).transform(X)
     
+    def to_dict(self) -> dict:
+        """
+        Convert the wrapper (excluding the trained TF model) to a JSON-safe dict.
+        """
+        state = {
+            "class": self.__class__.__name__,
+            "init_params": deepcopy(self._init_params),
+            "mean": None,
+        }
 
-    def save_model(self, folder_path: str) -> None:
+        if hasattr(self, "_mean") and self._mean is not None:
+            state["mean"] = self._mean.tolist()
+
+        return state
+
+    @classmethod
+    def from_dict(cls, state: dict) -> "IvisWrapper":
+        """
+        Reconstruct an IvisWrapper from a dict.
+        """
+        obj = cls(**state["init_params"])
+
+        if state.get("mean") is not None:
+            obj._mean = np.asarray(state["mean"])
+
+        return obj
+    
+
+    def save_model(self, folder_path: str,
+                   save_format: str = "tf",
+                   overwrite=True) -> None:
         """
         Save the trained model to a file.
         
@@ -198,11 +243,23 @@ class IvisWrapper(Ivis):
         folder_path : str
             Path to the folder where the model will be saved.
         """
+
+        folder_path = Path(folder_path).absolute().as_posix()
+
+        # Check if the parent folder exists
+        parent_folder = Path(folder_path).parent
+
+        if not overwrite and Path(folder_path).exists():
+            raise FileExistsError(f"The folder {folder_path} already exists and overwrite is set to False.")
+        
+        if not parent_folder.exists():
+            parent_folder.mkdir(parents=True, exist_ok=True)
+
         super().save_model(folder_path,
-                           save_format="h5")
+                           save_format=save_format,
+                           overwrite=overwrite)
     
-    @staticmethod
-    def load_model(filepath: str) -> 'IvisWrapper':
+    def load_model(self, filepath: str) -> 'IvisWrapper':
         """
         Load a trained model from a file.
         
@@ -216,7 +273,17 @@ class IvisWrapper(Ivis):
         model : IvisWrapper
             The loaded ivis model.
         """
-        return super().load_model(filepath)
+        
+
+        filepath = Path(filepath).absolute().as_posix()
+
+        loaded = Ivis().load_model(filepath)
+
+        # Copy ivis internals into *this* instance
+        self.__dict__.update(loaded.__dict__)
+
+        return self
+
     
     
     
