@@ -49,6 +49,7 @@ class IvisWrapper(Ivis):
         annoy_index_path: Optional[str] = None,
         build_index_on_disk: bool = True,
         verbose: int = 1,
+        **kwargs
     ):
         """
         Initialize ivis wrapper.
@@ -112,7 +113,8 @@ class IvisWrapper(Ivis):
             supervision_weight=supervision_weight,
             annoy_index_path=annoy_index_path,
             build_index_on_disk=build_index_on_disk,
-            verbose=verbose
+            verbose=verbose,
+            **kwargs
         )
         
     def fit(self, 

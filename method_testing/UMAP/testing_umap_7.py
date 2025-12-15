@@ -2,18 +2,27 @@
 r"""Test PCA with rank-based weighting on BBOB functions."""
 
 import numpy as np
-from dimensionality_reduction import UMAPWrapper
+#from dimensionality_reduction import ParametricUMAPWrapper
 #from weighting_premises import get_rank_based_weighting
+
 from qmc_samplers import get_sampler
 from scipy.stats import qmc
 from typing import List, Union
+import tensorflow as tf
 from ioh import get_problem
 
+# Debugging: 
+#tf.debugging.enable_check_numerics()
+#tf.config.run_functions_eagerly(True)
 
-# Define a simple test function
-problem_id = 1  # Sphere function
+#tf.debugging.enable_check_numerics()
+
+from umap.parametric_umap import ParametricUMAP
+
+# Define a simple test functionan
+problem_id = 24  # Sphere function
 problem_instance = 1 # Instance ID
-dimension = 60
+dimension = 20
 
 reduction_percent = 0.2 # Reduce to 50% of original dimensions
 #n_components = int(dimension * reduction_percent)
@@ -41,7 +50,7 @@ ub = problem.bounds.ub
 
 
 # Scale samples to the problem bounds
-X = qmc.scale(X, lb, ub)
+X = qmc.scale(X, lb, ub).astype(np.float32)
 
 # Compute function values
 y_values = np.array([problem(x) for x in X])
@@ -52,20 +61,17 @@ y_values = np.array([problem(x) for x in X])
 
 
 # Initialize Weighted PCA
-umap_model = UMAPWrapper(n_components=n_components,
-                        n_neighbors=15,
-                        min_dist=0.1,
-                        metric='euclidean',
-                        random_state=random_seed,
-                        n_epochs=5000,
-                        learning_rate=0.8,
-                        init='spectral',
-                        verbose=True)
+umap_model = ParametricUMAP(batch_size=64,
+                            n_neighbors=15,
+                            min_dist=0.1,
+                            n_components=n_components,
+                            parametric_reconstruction=False,
+                            target_metric='l2',
+                            random_state=random_seed)
 
 # Fit and transform the data
 #ivis_model.fit(X,Y=y_values)
-umap_model.fit(X, y=y_values)
-X_reduced:np.ndarray = umap_model.transform(X)
+X_reduced = umap_model.fit_transform(X, y=y_values)
 
 print(f"Reduced shape: {X_reduced.shape}", 
       umap_model.get_params())

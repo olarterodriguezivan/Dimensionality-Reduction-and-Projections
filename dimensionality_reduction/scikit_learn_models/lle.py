@@ -8,9 +8,13 @@ class LLEWrapper(LocallyLinearEmbedding):
     def __init__(self, n_components: int = 2,
                  n_neighbors: int = 5,
                  method: str = 'standard',
-                 eigen_solver: Optional[str] = None,
+                 eigen_solver: Optional[str] = 'auto',
                  tol: float = 1e-6,
                  max_iter: int = 100,
+                 hessian_tol: float = 1e-4,
+                 modified_tol: float = 1e-4,
+                 neighbors_algorithm: str = 'auto',
+                 random_state: Optional[int] = 1234,
                  n_jobs: Optional[int] = None):
         r"""
         Wrapper for sklearn's Locally Linear Embedding (LLE)
@@ -30,6 +34,10 @@ class LLEWrapper(LocallyLinearEmbedding):
                          eigen_solver=eigen_solver,
                          tol=tol,
                          max_iter=max_iter,
+                         hessian_tol=hessian_tol,
+                         modified_tol=modified_tol,
+                         neighbors_algorithm=neighbors_algorithm,
+                         random_state=random_state,
                          n_jobs=n_jobs)
     
     def fit(self, X: np.ndarray, y: Optional[np.ndarray] = None,
@@ -67,7 +75,27 @@ class LLEWrapper(LocallyLinearEmbedding):
         return super().transform(X_weighted)
     
     def fit_transform(self, X, y = None, sample_weights: Optional[np.ndarray] = None) -> np.ndarray:
-        return self.fit(X, y, sample_weights=sample_weights).transform(X)
+        
+        
+        if sample_weights is None:
+            sample_weights = np.ones(X.shape[0])
+        elif not isinstance(sample_weights, np.ndarray):
+            sample_weights = np.array(sample_weights).ravel()
+        
+        # Normalize weights
+        sample_weights = sample_weights / np.sum(sample_weights)
+
+        # Store sample weights
+        self._sample_weights = sample_weights.copy()
+
+        # Center the data with weights
+        self._mean = np.mean(X, axis=0)
+        X_centered = X - self._mean
+        
+        # Apply weights
+        X_weighted = X_centered * self._sample_weights[:, None]
+
+        return super().fit_transform(X_weighted, y)
     
     # ---------------------------------------
     # Saving and loading methods

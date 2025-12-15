@@ -2,9 +2,8 @@
 r"""Test PCA with rank-based weighting on BBOB functions."""
 
 import numpy as np
-#from dimensionality_reduction import ParametricUMAPWrapper
+from dimensionality_reduction import UMAPWrapper
 #from weighting_premises import get_rank_based_weighting
-from umap.parametric_umap import ParametricUMAP
 from qmc_samplers import get_sampler
 from scipy.stats import qmc
 from typing import List, Union
@@ -12,7 +11,7 @@ from ioh import get_problem
 
 
 # Define a simple test function
-problem_id = 1  # Sphere function
+problem_id = 18 # Sphere function
 problem_instance = 1 # Instance ID
 dimension = 60
 
@@ -53,11 +52,15 @@ y_values = np.array([problem(x) for x in X])
 
 
 # Initialize Weighted PCA
-umap_model = ParametricUMAP(batch_size=64,
-                            n_neighbors=15,
-                            min_dist=0.1,
-                            n_components=n_components,
-                            random_state=random_seed)
+umap_model = UMAPWrapper(n_components=n_components,
+                        n_neighbors=15,
+                        min_dist=0.1,
+                        metric='euclidean',
+                        random_state=random_seed,
+                        n_epochs=5000,
+                        learning_rate=0.8,
+                        init='spectral',
+                        verbose=True)
 
 # Fit and transform the data
 #ivis_model.fit(X,Y=y_values)

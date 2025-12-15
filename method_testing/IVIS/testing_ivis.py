@@ -2,7 +2,7 @@
 r"""Test PCA with rank-based weighting on BBOB functions."""
 
 import numpy as np
-from dimensionality_reduction import IvisWrapper
+from dimensionality_reduction import IvisWrapper, is_supervised_model
 #from weighting_premises import get_rank_based_weighting
 from qmc_samplers import get_sampler
 from scipy.stats import qmc
@@ -10,10 +10,12 @@ from typing import List, Union
 from ioh import get_problem
 
 
+print("Is the model supervised?:", is_supervised_model(IvisWrapper))
+
 # Define a simple test function
-problem_id = 13  # Gallagher 101 function
+problem_id = 12 # Gallagher 101 function
 problem_instance = 1 # Instance ID
-dimension = 40
+dimension = 20
 
 reduction_percent = 0.25  # Reduce to 50% of original dimensions
 #n_components = int(dimension * reduction_percent)
@@ -53,12 +55,12 @@ y_values = np.array([problem(x) for x in X])
 
 # Initialize Weighted PCA
 ivis_model =IvisWrapper(n_components=n_components,
-                        k=50,
+                        k=15,
                         distance='euclidean',
                         epochs=1000,
                         n_epochs_without_progress=50,
                         model='szubert',
-                        supervision_metric="mean_squared_error",
+                        supervision_metric="mean_squared_logarithmic_error",
                         verbose=True)
 
 # Fit and transform the data

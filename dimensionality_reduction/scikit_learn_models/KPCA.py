@@ -8,6 +8,13 @@ class WeightedKPCA(KernelPCA):
     
     Extends scikit-learn's KernelPCA to support weighted samples.
     """
+
+    def __init__(self,
+                 **kwargs):
+        
+        super().__init__(**kwargs)
+        self._sample_weights = None
+        self._mean = None
     
     def fit(self, X, y=None, sample_weights=None)-> 'WeightedKPCA':
         """

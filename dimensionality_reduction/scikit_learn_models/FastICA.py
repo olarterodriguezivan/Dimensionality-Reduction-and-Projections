@@ -2,20 +2,21 @@ import numpy as np
 from numpy.linalg import eigh, pinv
 from scipy.linalg import sqrtm
 from joblib import load, dump
-from typing import Optional
+from typing import Optional, Union
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.decomposition import FastICA
 
 class WeightedFastICA(FastICA):
     def __init__(self, n_components: Optional[int] = None,
                  algorithm: str = 'parallel',
-                 whiten: bool = True,
+                 whiten: Union[bool,str] = "unit-variance",
                  fun: str = 'logcosh',
                  fun_args: Optional[dict] = None,
                  max_iter: int = 200,
                  tol: float = 1e-4,
                  w_init: Optional[np.ndarray] = None,
-                 random_state: Optional[int] = None):
+                 random_state: Optional[int] = None,
+                 whiten_solver: str = 'svd') -> 'WeightedFastICA':
         
         r"""
         Weighted Fast Independent Component Analysis (FastICA) implementation
@@ -41,7 +42,8 @@ class WeightedFastICA(FastICA):
                          max_iter=max_iter,
                          tol=tol,
                          w_init=w_init,
-                         random_state=random_state)
+                         random_state=random_state,
+                         whiten_solver=whiten_solver)
         
         # Initialize sample weights
         self._sample_weights: np.ndarray = None

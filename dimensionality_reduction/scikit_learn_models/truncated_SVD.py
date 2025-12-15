@@ -10,6 +10,7 @@ class WeightedTruncatedSVD(TruncatedSVD):
                     random_state=None,
                     n_oversamples=10,
                     power_iteration_normalizer='auto',
+                    tol=1e-12,
                   **kwargs):
         
         r"""
@@ -44,7 +45,12 @@ class WeightedTruncatedSVD(TruncatedSVD):
                          random_state=random_state,
                          n_oversamples=n_oversamples,
                          power_iteration_normalizer=power_iteration_normalizer,
+                         tol=tol,
                          **kwargs)
+        
+        # Initialize sample weights
+        self._sample_weights: np.ndarray = None
+        self._mean: np.ndarray = None
 
     
     def fit(self, X, y=None, sample_weights=None):
@@ -128,7 +134,27 @@ class WeightedTruncatedSVD(TruncatedSVD):
         X_transformed : array of shape (n_samples, n_components)
             Transformed data.
         """
-        return self.fit(X, y=y, sample_weights=sample_weights).transform(X)
+
+        X = np.asarray(X)
+        
+        if sample_weights is None:
+            sample_weights = np.ones_like(X.shape[0])
+        else:
+            sample_weights = np.asarray(sample_weights).ravel()
+        
+        # Normalize weights (for sanity of implementation)
+        sample_weights = sample_weights / np.sum(sample_weights)
+
+        # Store the weights
+        self._sample_weights = sample_weights
+
+        # Center the data
+        self._mean = np.mean(X, axis=0)
+        X_centered = X - self._mean
+
+        X_weighted = X_centered * self._sample_weights[:, None]
+
+        return super().fit_transform(X_weighted, y)
     
 
     def inverse_transform(self, X):
