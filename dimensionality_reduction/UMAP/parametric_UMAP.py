@@ -1,7 +1,14 @@
+import os
 import numpy as np
 from umap.parametric_umap import ParametricUMAP, load_ParametricUMAP
 from dimensionality_reduction.UMAP.non_parametric_UMAP import DEFAULT_TARGET_METRICS
 from pathlib import Path
+from warnings import warn, catch_warnings, filterwarnings
+import pickle
+from typing import Union, Optional, Dict, Any
+import json
+from tensorflow import keras
+
 
 
 class ParametricUMAPTransformer(ParametricUMAP):
@@ -156,45 +163,126 @@ class ParametricUMAPTransformer(ParametricUMAP):
 
 
     
+    def save_model(
+        self,
+        folder_path: Union[str, Path],
+        overwrite: bool = True,
+        exclude_raw_data: bool = False,
+        verbose: bool = True,
+    ) -> None:
+        folder = Path(folder_path).expanduser().resolve()
 
-    def save_model(self,
-                   folder_path: str,
-                   overwrite: bool = True,
-                   exclude_raw_data: bool = False) -> None:
+        if folder.exists() and not overwrite:
+            raise FileExistsError(f"{folder} exists and overwrite=False")
 
-        folder_path:Path = Path(folder_path).expanduser().resolve()
+        folder.mkdir(parents=True, exist_ok=True)
 
-        if folder_path.exists():
-            if not overwrite:
-                raise FileExistsError(
-                    f"The folder {folder_path} already exists and overwrite=False."
-                )
-        else:
-            folder_path.mkdir(parents=True, exist_ok=True)
+        # ------------------------------------------------------------
+        # 1) Save ONLY the Keras submodels that are safe to serialize
+        #    (DO NOT save self.parametric_model -> causes get_config error)
+        # ------------------------------------------------------------
+        keras_dir = folder / "keras"
+        keras_dir.mkdir(exist_ok=True)
 
-        super().save(
-            save_location=folder_path.as_posix(),
-            verbose=True,
-            exclude_raw_data=exclude_raw_data,
-        )
+        if getattr(self, "encoder", None) is not None:
+            enc_path = keras_dir / "encoder.keras"
+            self.encoder.save(enc_path)
+            if verbose:
+                print(f"Saved encoder to {enc_path}")
 
+        if getattr(self, "decoder", None) is not None:
+            dec_path = keras_dir / "decoder.keras"
+            self.decoder.save(dec_path)
+            if verbose:
+                print(f"Saved decoder to {dec_path}")
 
+        # ------------------------------------------------------------
+        # 2) Save UMAP base state WITHOUT any Keras objects attached
+        # ------------------------------------------------------------
+        state: Dict[str, Any] = dict(self.__dict__)  # shallow copy
+
+        # Remove Keras objects that must never be pickled
+        for k in ["encoder", "decoder", "parametric_model", "model"]:
+            state.pop(k, None)
+
+        # Optionally remove raw data (often huge)
+        if exclude_raw_data:
+            state.pop("_raw_data", None)
+            if "knn_search_index" in state:
+                try:
+                    # knn_search_index can contain raw data too
+                    ks = state["knn_search_index"]
+                    if hasattr(ks, "_raw_data"):
+                        ks = ks  # keep object but strip raw
+                        ks._raw_data = None
+                        state["knn_search_index"] = ks
+                except Exception:
+                    pass
+
+        state_path = folder / "umap_state.pkl"
+        with open(state_path, "wb") as f:
+            pickle.dump(state, f, protocol=pickle.HIGHEST_PROTOCOL)
+        if verbose:
+            print(f"Saved UMAP base state to {state_path}")
+
+        # Small metadata file for debugging / future migrations
+        meta = {"class": self.__class__.__name__, "format_version": 1}
+        meta_path = folder / "metadata.json"
+        with open(meta_path, "w") as f:
+            json.dump(meta, f, indent=2)
+        if verbose:
+            print(f"Saved metadata to {meta_path}")
 
     @classmethod
-    def load_model(cls, folder_path: str) -> "ParametricUMAPTransformer":
-        folder_path = Path(folder_path).expanduser().resolve()
+    def load_model(
+        cls,
+        folder_path: Union[str, Path],
+        verbose: bool = True,
+    ) -> "ParametricUMAPTransformer":
+        folder = Path(folder_path).expanduser().resolve()
+        if not folder.exists():
+            raise FileNotFoundError(f"Model folder not found: {folder}")
 
-        base_model = load_ParametricUMAP(
-            save_location=folder_path.as_posix(),
-            verbose=True,
-        )
+        # ------------------------------------------------------------
+        # 1) Load UMAP base state (Python only)
+        # ------------------------------------------------------------
+        state_path = folder / "umap_state.pkl"
+        if not state_path.exists():
+            raise FileNotFoundError(f"Missing {state_path}")
 
-        # Create an uninitialized instance
-        obj = cls.__new__(cls)
+        with open(state_path, "rb") as f:
+            state = pickle.load(f)
 
-        # Copy internal state
-        obj.__dict__.update(base_model.__dict__)
+        obj = cls.__new__(cls)          # bypass __init__
+        obj.__dict__.update(state)
+
+        # ------------------------------------------------------------
+        # 2) Load Keras submodels (encoder/decoder)
+        # ------------------------------------------------------------
+        keras_dir = folder / "keras"
+
+        enc_path = keras_dir / "encoder.keras"
+        if enc_path.exists():
+            obj.encoder = keras.models.load_model(enc_path)
+            if verbose:
+                print(f"Loaded encoder from {enc_path}")
+        else:
+            obj.encoder = None
+
+        dec_path = keras_dir / "decoder.keras"
+        if dec_path.exists():
+            obj.decoder = keras.models.load_model(dec_path)
+            if verbose:
+                print(f"Loaded decoder from {dec_path}")
+        else:
+            obj.decoder = None
+
+        # ------------------------------------------------------------
+        # 3) Rebuild parametric model if needed (optional but recommended)
+        # ------------------------------------------------------------
+        # Some codepaths require parametric_model; if you hit issues later,
+        # rebuild it lazily in fit/transform, or rebuild here if you know how.
+        obj.parametric_model = None
 
         return obj
-
         

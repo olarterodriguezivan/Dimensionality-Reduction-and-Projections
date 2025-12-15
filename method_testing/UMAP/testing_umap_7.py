@@ -67,7 +67,11 @@ umap_model = ParametricUMAPWrapper(batch_size=64,
                             n_components=n_components,
                             parametric_reconstruction=False,
                             target_metric='l2',
-                            random_state=random_seed)
+                            random_state=random_seed,
+                            n_epochs=200,
+                            )
+
+#umap_model.n_training_epochs = 5
 
 # Fit and transform the data
 #ivis_model.fit(X,Y=y_values)
@@ -77,6 +81,9 @@ X_reduced = umap_model.fit_transform(X, y=y_values)
 umap_model.save_model(folder_path="models/parametric_umap/umap_bbob24_model", 
                       overwrite=True,
                       exclude_raw_data=True)
+
+# Load the model
+loaded_umap_model = ParametricUMAPWrapper.load_model(folder_path="models/parametric_umap/umap_bbob24_model")
 
 print(f"Reduced shape: {X_reduced.shape}", 
       umap_model.get_params())
