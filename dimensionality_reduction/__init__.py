@@ -18,6 +18,10 @@ SUPERVISED_MODELS = [
     "ParametricUMAPWrapper",
 ]
 
+RANDOM_MODELS = [
+    "RandomEmbedding"
+]
+
 
 def _safe_import(module_path, name=None):
     """
@@ -40,9 +44,19 @@ def is_supervised_model(model) -> bool:
 
     return cls.__name__ in SUPERVISED_MODELS
 
+def is_random_model(model) -> bool:
+    if model is None:
+        return False
+
+    # Handle instances
+    cls = model if isinstance(model, type) else model.__class__
+
+    return cls.__name__ in RANDOM_MODELS
+
 
 # --- hard-coded models ---
 WeightedPCA = _safe_import(".hard_coded_models.weighted_pca", "WeightedPCA")
+RandomEmbedding = _safe_import(".hard_coded_models.random_embedding", "RandomEmbedding")
 
 # --- scikit-learn models ---
 IsomapWrapper = _safe_import(".scikit_learn_models.isomap", "IsomapWrapper")
