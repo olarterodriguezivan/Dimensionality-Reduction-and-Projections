@@ -20,6 +20,7 @@ SUPERVISED_MODELS = [
 
 RANDOM_MODELS = [
     "RandomEmbedding"
+    "GaussianRandomEmbeddings"
 ]
 
 
@@ -65,6 +66,7 @@ ScikitKPCAWrapper = _safe_import(".scikit_learn_models.KPCA", "WeightedKPCA")
 ScikitPCAWrapper = _safe_import(".scikit_learn_models.PCA", "WeightedPCA")
 LLEWrapper = _safe_import(".scikit_learn_models.lle", "LLEWrapper")
 TruncatedSVDWrapper = _safe_import(".scikit_learn_models.truncated_SVD", "WeightedTruncatedSVD")
+GaussianRandomEmbeddings = _safe_import(".scikit_learn_models.gaussian_random_embeddings", "GaussianRandomEmbeddings")
 
 # --- IVIS model ---
 IvisWrapper = _safe_import(".ivis.ivis", "IvisWrapper")
