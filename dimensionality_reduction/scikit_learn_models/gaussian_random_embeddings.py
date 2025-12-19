@@ -7,7 +7,7 @@ from typing import Optional, Union
 from pathlib import Path
 import joblib
 
-class GaussianRandomEmbeddings(GaussianRandomProjection, BaseEstimator, TransformerMixin):
+class GaussianRandomEmbeddings(GaussianRandomProjection):
     """
     Wrapper for scikit-learn's GaussianRandomProjection for dimensionality reduction.
     
