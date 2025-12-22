@@ -61,6 +61,10 @@ cover/
 *ela_features.csv
 *ela_features_2.csv
 
+# Saved models
+**/random_embedding_seed_*.pkl
+**/ela_features_reduced_seed_*_round_*.csv
+
 # Django stuff:
 *.log
 local_settings.py
