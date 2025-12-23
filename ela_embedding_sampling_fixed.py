@@ -140,7 +140,7 @@ def worker_extract_and_save_2(args, **kwargs):
     fX = read_csv(y_file)["fX"].values
 
     out_dir = (
-        base_dir / "ela_features_reduced" / obj_type /
+        base_dir / "ela_features_reduced_2" / obj_type /
         f"D_{dim}" / f"s_{seed}" /
         f"N_{n_samples}" / f"f_{func_id}" /
         f"id_{inst_id}" / f"r_ratio_{reduction_ratio}"
@@ -151,7 +151,6 @@ def worker_extract_and_save_2(args, **kwargs):
     model_dir.mkdir(parents=True, exist_ok=True)
 
     for cur_seed in seed_list:
-        rng = np.random.default_rng(cur_seed)
 
         gre = GaussianRandomEmbeddings(
             n_components=reduced_dim,
@@ -162,15 +161,16 @@ def worker_extract_and_save_2(args, **kwargs):
 
         max_bs = min(n_bootstrap_samples, X_reduced.shape[0])
 
+        feature_dir = out_dir / "features" / f"random_embedding_seed_{cur_seed}"
+        feature_dir.mkdir(parents=True, exist_ok=True)
+
         for ii in range(bootstrap_rounds):
-            idx = rng.choice(X_reduced.shape[0], size=max_bs, replace=True)
+            rng_embed = np.random.default_rng(seed=1000 + ii)
+            idx = rng_embed.choice(X_reduced.shape[0], size=max_bs, replace=False)
             Xb = X_reduced[idx]
             fXb = fX[idx]
 
-            feature_dir = out_dir / "features" / f"random_embedding_seed_{cur_seed}"
-            feature_dir.mkdir(parents=True, exist_ok=True)
-
-            feature_file = feature_dir / f"ela_features_reduced_seed_{cur_seed}_round_{ii}.csv"
+            feature_file = feature_dir / f"round_{ii}.csv"
 
             df = extract_ela_features(cur_seed, Xb, fXb, reduced_dim, func_id, inst_id)
 
@@ -205,14 +205,14 @@ def main():
     for key, x_file in x_dict.items():
         if key in y_dict:
             dim, _, n_samples, _ = key
-            if dim <= 40 and n_samples / dim >= 50:
+            if dim < 40 and n_samples / dim >= 50:
                 for y_file, func_id, inst_id in y_dict[key]:
                     if func_id in sets_of_functions:
                         tasks.append((key, x_file, y_file, func_id, inst_id, base_dir))
 
     print(f"Found {len(tasks)} tasks.")
 
-    n_proc = 1
+    n_proc = min(cpu_count(), 4)
     if n_proc == 1:
         for task in tasks:
             worker_extract_and_save_2(task, **kwargs)

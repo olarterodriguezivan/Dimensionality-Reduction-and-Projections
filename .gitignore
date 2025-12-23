@@ -64,6 +64,7 @@ cover/
 # Saved models
 **/random_embedding_seed_*.pkl
 **/ela_features_reduced_seed_*_round_*.csv
+**/round_*.csv
 
 # Django stuff:
 *.log
