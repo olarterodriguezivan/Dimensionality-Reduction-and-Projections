@@ -125,7 +125,8 @@ def evaluate_bbob_problem(prob: BBOB, X: pd.DataFrame) -> np.ndarray:
 
 def main():
     # Get the list of X sample files in the specified directory
-    directory = Path(os.getcwd())  # You can change this to any directory you want
+    #directory = Path(os.getcwd())  # You can change this to any directory you want
+    directory = Path("x_samples/ELA_extraction/Dimension_20")
     file_list = get_x_sample_filelist(directory)
     
     # Distill the file list to extract dimension, seed, and number of samples
@@ -156,6 +157,7 @@ def main():
                 if save_path.exists() is False:
                     save_path.mkdir(parents=True, exist_ok=True)
                 else:
+                    print(f"Evaluations for Function {prob_id}, Instance {instance} already exist at {save_path}, skipping.")
                     continue
                 out_file = save_path.joinpath("evaluations.csv")
                 df_out = pd.DataFrame(fX, columns=["fX"])

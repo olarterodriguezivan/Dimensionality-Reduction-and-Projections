@@ -215,7 +215,7 @@ def main():
     tasks = []
     for key, x_file in x_dict.items():
         if key in y_dict:
-            if key[0] <=40:  # only dimensions up to 40
+            if key[0] <40 and key[1]>2000:  # only dimensions up to 40
                 for (y_file, func_id, inst_id) in y_dict[key]:
                     tasks.append((key, x_file, y_file, func_id, inst_id, base_dir))
 
@@ -223,7 +223,7 @@ def main():
 
     # run multiprocessing
     #n_proc = max(1, cpu_count()//2 - 1)
-    n_proc = 8
+    n_proc = 6
     print(f"Using {n_proc} processes...")
 
     if n_proc == 1:
