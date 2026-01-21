@@ -26,7 +26,7 @@ import pyarrow.parquet as pq
 
 N_WORKERS = 5                 # Safe on 16 GB RAM
 CHUNK_SIZE = 10_000           # Files per chunk
-OUTPUT_FILE = "reduced.parquet"
+OUTPUT_FILE = "reduced_8_2000_0.25.parquet"
 
 # Metadata dtypes (must be defined by you)
 META_DTYPES = {
@@ -221,7 +221,7 @@ if __name__ == "__main__":
     # reduced_files = sorted(Path("data").glob("*.csv"))
     #reduced_files = [...]
 
-    ela_features_reduced_path = Path("ela_features_reduced_3/ELA_extraction/D_20").resolve()
+    ela_features_reduced_path = Path("C:\\Users\\iolar\\Downloads\\some_other_files\\ela_features_reduced_7").resolve()
     reduced_files = sorted(ela_features_reduced_path.rglob("*.csv"))
 
     main(reduced_files)
