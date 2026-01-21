@@ -60,6 +60,12 @@ cover/
 *evaluations.csv
 *ela_features.csv
 *ela_features_2.csv
+*.parquet
+
+# Plots
+*.png
+*.pdf
+*.svg
 
 # Saved models
 **/random_embedding_seed_*.pkl
