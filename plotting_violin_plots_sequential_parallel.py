@@ -20,7 +20,7 @@ plt.style.use('fast') # Optimization: Use faster rendering style
 ## =============================
 DATASET_SIZE: int = 200
 REDUCTION_RATIO: float = 0.25
-FUNCTION_IDS: list = [1, 8, 11, 16, 20]
+FUNCTION_IDS: list = [20]
 INSTANCE_IDS: list = [*range(15)]
 DATASET_200_CONSIDERED_SEEDS = [*range(1001, 1041)]
 DATASET_2000_CONSIDERED_SEEDS = [*range(2001, 2041)]
