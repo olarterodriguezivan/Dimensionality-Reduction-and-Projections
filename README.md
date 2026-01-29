@@ -37,9 +37,11 @@ The following Python packages are required:
 - `numpy`
 - `scipy`
 - `ioh`
+- `pflacco`
+- `scikit-learn`
 
 Install them with:
-`pip install numpy scipy ioh`
+`pip install numpy scipy ioh pflacco scikit-learn`
 
 
 ---
