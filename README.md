@@ -281,3 +281,149 @@ To run Step 2:
 1. Edit the directory path in y_sampling.py to point to your X-sample root,
 2. Execute:
   `python y_sampling.py`
+
+## Step 3 — Exploratory Landscape Analysis (ELA) Feature Extraction
+
+Step 3 converts the raw `(X, fX)` datasets generated in Steps 1 and 2 into **high-level Exploratory Landscape Analysis (ELA) features**.
+
+This step is responsible for transforming sampled optimization landscapes into **fixed-dimensional feature vectors** suitable for:
+- algorithm selection,
+- performance prediction,
+- surrogate modeling,
+- or landscape classification.
+
+Two complementary implementations are provided:
+
+- `ela_sampling.py` — ELA feature extraction in the **original search space**
+- `ela_embedding_sampling_fixed.py` — ELA feature extraction after **random dimensionality reduction**
+
+---
+
+## Purpose of Step 3
+
+Given:
+- input samples `X` (Step 1),
+- objective evaluations `fX` (Step 2),
+
+Step 3:
+1. Matches corresponding `X` and `fX` files using directory metadata,
+2. Computes a suite of **ELA features** using the `pflacco` library,
+3. Saves one feature vector per:
+   - BBOB function,
+   - BBOB instance,
+   - sampling configuration.
+
+The result is a structured collection of CSV files, each representing a **numerical fingerprint of a landscape**.
+
+---
+
+## Variant A — Direct ELA (`ela_sampling.py`)
+
+This script extracts ELA features **directly in the original problem dimension**.
+
+### What it does
+
+For each `(X, fX)` pair:
+- Computes classical ELA feature groups:
+  - meta-model features,
+  - distribution features,
+  - level-set features,
+  - nearest-better clustering (NBC),
+  - dispersion features,
+  - information content,
+  - PCA-based features,
+- Computes **fitness–distance correlation (FDC)** using the known BBOB optimum,
+- Produces **one feature vector per function–instance pair**.
+
+### Characteristics
+
+- No dimensionality reduction
+- One-shot feature extraction (no bootstrapping)
+- Best suited for **low-to-moderate dimensions**
+- Fast and deterministic given fixed inputs
+
+### Output (conceptual)
+ela_features_2/
+└── <objective_type>/
+└── Dimension_<D>/
+└── seed_<SEED>/
+└── Samples_<N>/
+└── f_<FUNCTION_ID>/
+└── id_<INSTANCE>/
+└── ela_features.csv
+
+
+---
+
+## Variant B — Embedded & Bootstrapped ELA (`ela_embedding_sampling_fixed.py`)
+
+This script extends classical ELA by applying **Gaussian random embeddings** and **bootstrap resampling** before feature extraction.
+
+### What it does
+
+For each `(X, fX)` pair:
+1. Reduces dimensionality using **Gaussian Random Embeddings**:
+   - reduced dimension = `reduction_ratio × original dimension`,
+2. Repeats the embedding with multiple random seeds,
+3. For each embedding:
+   - draws multiple bootstrap subsamples,
+   - extracts ELA features on the reduced space,
+4. Stores both:
+   - learned embedding models,
+   - multiple ELA feature realizations.
+
+### Why this exists
+
+- Classical ELA features degrade in high dimensions
+- Random embeddings:
+  - stabilize feature estimates,
+  - reduce sample complexity,
+  - enable ELA in higher-dimensional settings
+- Bootstrapping captures **feature uncertainty and variability**
+
+### Characteristics
+
+- Dimensionality reduction + stochasticity
+- Multiple feature vectors per function–instance
+- Significantly more computationally expensive
+- Designed for **robust analysis in higher dimensions**
+
+### Output (conceptual)
+ela_features_reduced_2/
+└── <objective_type>/
+└── D_<D>/
+└── s_<SEED>/
+└── N_<N>/
+└── f_<FUNCTION_ID>/
+└── id_<INSTANCE>/
+└── r_ratio_<R>/
+├── models/
+│ └── random_embedding_seed_.pkl
+└── features/
+└── random_embedding_seed_/
+└── round_*.csv
+
+
+---
+
+## Relationship Between the Two Scripts
+
+| Aspect | `ela_sampling.py` | `ela_embedding_sampling_fixed.py` |
+|-----|------------------|-----------------------------------|
+| Feature space | Original dimension | Reduced dimension |
+| Randomness | None | Embeddings + bootstraps |
+| Output size | One feature vector | Many feature vectors |
+| Best for | Low dimensions | Medium–high dimensions |
+| Purpose | Baseline ELA | Robust / stabilized ELA |
+
+Both scripts **consume exactly the same `(X, fX)` data** produced by Steps 1 and 2.
+
+---
+
+## Final Output of the Pipeline
+
+After Step 3, the pipeline produces:
+- structured `(X, fX)` datasets,
+- one or more ELA feature representations per landscape,
+- ready-to-use inputs for downstream or analysis tasks.
+
