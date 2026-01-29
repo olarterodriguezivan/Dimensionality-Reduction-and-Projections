@@ -154,10 +154,130 @@ This command:
 
 
 ---
+## Step 2 — Objective Evaluation (`y_sampling.py`)
 
-## Next Steps
+Step 2 evaluates previously generated **X samples** on **all BBOB benchmark functions and instances**, producing corresponding **Y (objective value) datasets**.
 
-- **Step 2:** Dataset post-processing and formatting  
-- **Step 3:** Model training or surrogate construction  
+This step consumes the output of **Step 1** and is implemented in:
+`y_sampling.py`
 
-These steps will consume the datasets produced by `sampler.py`.
+
+---
+
+## Purpose
+
+`y_sampling.py` performs the following tasks:
+
+1. Reads pre-generated **X samples** from CSV files,
+2. Automatically infers:
+   - problem dimension,
+   - random seed,
+   - number of samples,
+   - objective type (e.g. `ELA_extraction`, `reduction`),
+3. Evaluates **all BBOB functions (1–24)** and **all instances (0–14)** on the given samples,
+4. Saves function values (`fX`) to disk using a structured directory layout.
+
+This step decouples **input sampling (X)** from **objective evaluation (Y)**, allowing reuse of the same samples across multiple benchmark functions.
+
+---
+
+## Expected Input Structure
+
+`y_sampling.py` expects X samples stored as CSV files under a directory structure similar to:
+
+x_samples/
+└── <objective_type>/
+└── Dimension_<D>/
+└── seed_<SEED>/
+└── Samples_<N>/
+└── *_samples.csv
+
+
+Key assumptions:
+- Each CSV file contains only **X values** (shape: `n_samples × dimension`),
+- Directory names encode metadata:
+  - `Dimension_<D>`
+  - `seed_<SEED>`
+  - `Samples_<N>`
+- `<objective_type>` is a folder name such as `ELA_extraction` or `reduction`.
+
+---
+
+## What the Script Does
+
+For **each X-sample file**, the script:
+
+1. Loads the samples into a pandas DataFrame,
+2. Loops over:
+   - BBOB function IDs: `1 → 24`,
+   - BBOB instances: `0 → 14`,
+3. Evaluates the BBOB function at every sampled point,
+4. Stores the resulting objective values in a CSV file.
+
+Each evaluation produces a single-column file:
+
+
+Key assumptions:
+- Each CSV file contains only **X values** (shape: `n_samples × dimension`),
+- Directory names encode metadata:
+  - `Dimension_<D>`
+  - `seed_<SEED>`
+  - `Samples_<N>`
+- `<objective_type>` is a folder name such as `ELA_extraction` or `reduction`.
+
+---
+
+## What the Script Does
+
+For **each X-sample file**, the script:
+
+1. Loads the samples into a pandas DataFrame,
+2. Loops over:
+   - BBOB function IDs: `1 → 24`,
+   - Instances: `0 → 14`,
+3. Evaluates the BBOB function at every sampled point,
+4. Stores the resulting objective values in a CSV file.
+
+Each evaluation produces a single-column file:
+`*evaluations.csv`
+
+
+containing:
+fX
+---
+
+## Output Structure
+
+The computed objective values are saved under:
+bbob_evaluations/
+└── <objective_type>/
+└── Dimension_<D>/
+└── seed_<SEED>/
+└── Samples_<N>/
+└── f_<FUNCTION_ID>/
+└── id_<INSTANCE>/
+└── evaluations.csv
+
+
+Each `evaluations.csv` file corresponds to:
+- one BBOB function,
+- one BBOB instance,
+- one fixed set of X samples.
+
+If an output directory already exists, the script **skips recomputation** for that function–instance pair.
+
+---
+
+## How to Run
+
+At present, the input directory is defined directly inside the script:
+
+```python
+directory = Path("x_samples/ELA_extraction/Dimension_20")
+```
+
+To run Step 2:
+
+1. Edit the directory path in y_sampling.py to point to your X-sample root,
+2. Execute:
+  `python y_sampling.py`
