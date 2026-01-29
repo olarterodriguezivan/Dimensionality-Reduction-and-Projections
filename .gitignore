@@ -65,6 +65,7 @@ cover/
 *complete_data_generated.csv*
 *complete_data.csv*
 *complete_data_2.csv*
+*samples.csv*
 
 # Plots
 *.png
