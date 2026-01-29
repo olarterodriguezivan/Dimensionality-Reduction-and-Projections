@@ -61,6 +61,10 @@ cover/
 *ela_features.csv
 *ela_features_2.csv
 *.parquet
+*reduced_data.csv*
+*complete_data_generated.csv*
+*complete_data.csv*
+*complete_data_2.csv*
 
 # Plots
 *.png
