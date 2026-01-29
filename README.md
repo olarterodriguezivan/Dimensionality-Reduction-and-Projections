@@ -408,16 +408,6 @@ ela_features_reduced_2/
 
 ---
 
-## Relationship Between the Two Scripts
-
-| Aspect | `ela_sampling.py` | `ela_embedding_sampling_fixed.py` |
-|-----|------------------|-----------------------------------|
-| Feature space | Original dimension | Reduced dimension |
-| Randomness | None | Embeddings + bootstraps |
-| Output size | One feature vector | Many feature vectors |
-| Best for | Low dimensions | Medium–high dimensions |
-| Purpose | Baseline ELA | Robust / stabilized ELA |
-
 Both scripts **consume exactly the same `(X, fX)` data** produced by Steps 1 and 2.
 
 ---
