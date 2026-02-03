@@ -16,6 +16,8 @@ import multiprocessing as mp
 from itertools import islice
 from pathlib import Path
 
+from typing import Dict, Union
+
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -26,7 +28,7 @@ import pyarrow.parquet as pq
 
 N_WORKERS = 5                 # Safe on 16 GB RAM
 CHUNK_SIZE = 10_000           # Files per chunk
-OUTPUT_FILE = "reduced_oneshot_1_200_0.25.parquet"
+OUTPUT_FILE = "slices_200_0.25.parquet"
 
 # Metadata dtypes (must be defined by you)
 META_DTYPES = {
@@ -48,63 +50,79 @@ FEATURE_DTYPES = None
 # USER FUNCTIONS (you provide implementations)
 # ============================================================
 
-def extract_meta_data_from_reduced_feature_file_path(file_path: Path) -> dict:
+def extract_meta_data_from_reduced_feature_file_path(
+    file_path: Union[str, Path],
+    *,
+    n_samples: int = 200,
+) -> Dict[str, int | float]:
     """
-    Extracts meta data from the reduced feature file path.
-    
-    Parameters:
-    file_path (Path): Path object of the reduced feature file.
-    
-    Returns:
-    dict: A dictionary containing the extracted meta data.
-    """
-    """
-    Extract key-value numeric metadata from path segments like key_value.
+    Extract key-value numeric metadata from a reduced feature file path.
+
+    Expected path structure (example):
+        sampling_XXX_10D_2D/function3/group1_instance7/slice4.csv
+        sampling_XXX_10D_2D/function3/group1_instance7/full.csv
     """
 
     if not isinstance(file_path, (str, Path)):
-        raise ValueError("path must be a string or Path object")
+        raise TypeError("file_path must be a string or Path object")
 
     file_path = Path(file_path)
 
-    if not file_path.exists():
-        raise FileNotFoundError(f"The path {file_path} does not exist.")
+    metadata: Dict[str, int | float] = {}
 
-    metadata = {}
-
-    if "full.csv" in file_path.parts[-1]:
+    # ----------------------------
+    # Slice ID
+    # ----------------------------
+    file_name = file_path.name
+    if file_name == "full.csv":
         metadata["slice_id"] = 0
     else:
-        partial_file_name = file_path.parts[-1]
+        try:
+            metadata["slice_id"] = int(
+                file_name.replace("slice", "").replace(".csv", "")
+            )
+        except ValueError as exc:
+            raise ValueError(f"Invalid slice file name: {file_name}") from exc
 
-        # Remove the name slice
-        slice_id_txt = partial_file_name.split("slice")[-1].split(".csv")[0]
-        slice_id = int(slice_id_txt)
-        metadata["slice_id"] = slice_id
+    # ----------------------------
+    # Group ID & Instance Index
+    # ----------------------------
+    group_part = file_path.parts[-2]  # e.g. "group1_instance7"
+    instance_part = file_path.parts[-3]  # e.g. "group1_instance7"
 
+    try:
+        
+        metadata["group_id"] = int(group_part.removeprefix("group"))
+        metadata["instance_idx"] = int(instance_part.removeprefix("iid_"))
+    except Exception as exc:
+        raise ValueError(
+            f"Invalid group/instance segment: {group_part} / {instance_part}"
+        ) from exc
 
-    metadata["group_id"] = int(file_path.parts[-3].split("_")[-1])
+    # ----------------------------
+    # Function Index
+    # ----------------------------
+    function_part = file_path.parts[-4]  # e.g. "function3"
+    try:
+        metadata["function_idx"] = int(function_part.removeprefix("f"))
+    except ValueError as exc:
+        raise ValueError(f"Invalid function segment: {function_part}") from exc
 
+    # ----------------------------
+    # Sampling / Dimensions
+    # ----------------------------
+    sampling_part = file_path.parts[-5]
+    splits = sampling_part.split("_")
 
-    reduction_ratio_txt = file_path.parts[-4]
-    reduction_ratio = float(reduction_ratio_txt.split("_")[-1])
-    metadata["reduction_ratio"] = reduction_ratio
+    try:
+        ambient_dimension = int(splits[2].removesuffix("D"))
+        reduced_dimension = int(splits[3].removesuffix("D"))
+    except (IndexError, ValueError) as exc:
+        raise ValueError(f"Invalid sampling segment: {sampling_part}") from exc
 
-    instance_idx_txt = file_path.parts[-5]
-    instance_idx = int(instance_idx_txt.split("_")[-1])
-    metadata["instance_idx"] = instance_idx
-
-    function_idx_txt = file_path.parts[-6]
-    function_idx = int(function_idx_txt.split("_")[-1])
-    metadata["function_idx"] = function_idx
-
-    #n_samples_txt = file_path.parts[-7]
-    #n_samples = int(n_samples_txt.split("_")[-1])
-    
-
-    seed_txt = file_path.parts[-8]
-    seed = int(seed_txt.split("_")[-1])
-    metadata["seed_lhs"] = seed
+    metadata["dimension"] = ambient_dimension
+    metadata["reduction_ratio"] = reduced_dimension / ambient_dimension
+    metadata["n_samples"] = n_samples
 
     return metadata
 
@@ -222,7 +240,7 @@ if __name__ == "__main__":
     # reduced_files = sorted(Path("data").glob("*.csv"))
     #reduced_files = [...]
 
-    ela_features_reduced_path = Path("ela_features_reduced_13").resolve()
-    reduced_files = sorted(ela_features_reduced_path.rglob("*.csv"))
+    ela_features_reduced_path = Path("sampling_outputs_20D_5D").resolve()
+    slices_files = sorted(ela_features_reduced_path.rglob("*.csv"))
 
-    main(reduced_files)
+    main(slices_files)
