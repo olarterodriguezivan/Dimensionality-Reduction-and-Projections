@@ -23,7 +23,7 @@ def lhs_wrapper(dim:int,
 
     sampler = qmc.LatinHypercube(d=dim,
                                  scramble=True,
-                                 rng=np.random.default_rng(seed=random_seed),
+                                 seed=random_seed,
                                  optimization=criterion,
                                  strength=strength)
     

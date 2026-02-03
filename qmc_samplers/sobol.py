@@ -24,7 +24,7 @@ def sobol_wrapper(dim:int,
 
     sampler = qmc.Sobol(d=dim, 
                         scramble=True, 
-                        rng=rng, 
+                        seed=random_seed,
                         optimization=criterion)
     
     # Sobol requires n_samples to be a power of 2

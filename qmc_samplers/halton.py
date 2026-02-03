@@ -25,7 +25,7 @@ def halton_wrapper(dim:int,
 
     sampler = qmc.Halton(d=dim, 
                         scramble=True, 
-                        rng=rng,
+                        seed=random_seed,
                         optimization=criterion)
     
     data = sampler.random(n=n_samples)
