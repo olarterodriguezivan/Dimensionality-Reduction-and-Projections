@@ -19,6 +19,12 @@ matplotlib.rcParams['ps.fonttype'] = 42
 # Import pyplot
 import matplotlib.pyplot as plt
 
+
+from matplotlib.colors import ListedColormap, BoundaryNorm
+from matplotlib.patches import Patch
+from matplotlib.lines import Line2D
+
+
 ## =============================
 ## CONSTANT CONFIGURATION
 ## =============================
@@ -34,7 +40,7 @@ DATASET_200_CONSIDERED_SEEDS = [*range(1001,1041)] # Seeds to consider for DATAS
 EPSILON = 1e-9 # To avoid log(0) or ./0 issues
 
 ROOT_DIRECTORY = Path(__file__).resolve().parent
-SAVE_FIGURE_DIRECTORY = ROOT_DIRECTORY.joinpath("figures_barplots_slices_comparison_full")
+SAVE_FIGURE_DIRECTORY = ROOT_DIRECTORY.joinpath("figures_heatmaps_slices_ranked")
 
 DATA_SIZES = [200, 2000]
 REDUCTION_RATIOS = [0.5, 0.25, 0.1]
@@ -327,7 +333,6 @@ def load_all_datasets():
 
 
     return datasets
-
 
 # -----------------------------------------------------------------------------
 # Problem Differences
@@ -841,13 +846,10 @@ def violin_plots_of_differences_global_2(
     df_differences_full: pd.DataFrame,
     df_differences_reduced_05: pd.DataFrame,
     df_differences_reduced_025: pd.DataFrame,
-    df_differences_reduced_01: pd.DataFrame,
     df_differences_slices_0_05: pd.DataFrame,
     df_differences_slices_gen_05: pd.DataFrame,
     df_differences_slices_0_025: pd.DataFrame,
     df_differences_slices_gen_025: pd.DataFrame,
-    df_differences_slices_0_01: pd.DataFrame,
-    df_differences_slices_gen_01: pd.DataFrame,
     feature_name: str,
     function_id: int,
     instance_id_list: List[int] = INSTANCE_IDS,
@@ -878,14 +880,11 @@ def violin_plots_of_differences_global_2(
             prepare(df_differences_full, "Full (200 vs 2000)"),
             prepare(df_differences_reduced_05, "Reduced 0.5"),
             prepare(df_differences_reduced_025, "Reduced 0.25"),
-            prepare(df_differences_reduced_01, "Reduced 0.1"),
             prepare(df_differences_slices_0_05, "Sliced 0 – 0.5"),
             prepare(df_differences_slices_gen_05, "Sliced gen – 0.5"),
             prepare(df_differences_slices_0_025, "Sliced 0 – 0.25"),
             prepare(df_differences_slices_gen_025, "Sliced gen – 0.25"),
-            prepare(df_differences_slices_0_01, "Sliced 0 – 0.1"),
-            prepare(df_differences_slices_gen_01, "Sliced gen – 0.1"),
-        ],  
+        ],
         ignore_index=True,
     )
 
@@ -909,6 +908,258 @@ def violin_plots_of_differences_global_2(
     plt.tight_layout()
 
     return fig, ax
+
+
+def violin_plots_of_differences_global_2_heatmap(
+    df_differences_full: pd.DataFrame,
+    df_differences_reduced_05: pd.DataFrame,
+    df_differences_reduced_025: pd.DataFrame,
+    df_differences_reduced_01: pd.DataFrame,
+    df_differences_slices_0_05: pd.DataFrame,
+    df_differences_slices_gen_05: pd.DataFrame,
+    df_differences_slices_0_025: pd.DataFrame,
+    df_differences_slices_gen_025: pd.DataFrame,
+    df_differences_slices_0_01: pd.DataFrame,
+    df_differences_slices_gen_01: pd.DataFrame,
+    feature_name_list,
+    function_id_list,
+    instance_id_list=INSTANCE_IDS,
+    agg="median",
+):
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+    def prepare(df, feature, label):
+        out = df.loc[
+            df["function_idx"].isin(function_id_list)
+            & df["instance_idx"].isin(instance_id_list),
+            ["instance_idx", "function_idx", f"ratio_{feature}"],
+        ].copy()
+        out["dataset"] = label
+        out["feature"] = feature
+        out.rename(columns={f"ratio_{feature}": "ratio"}, inplace=True)
+        return out
+
+    dataset_order = [
+        "Full (200 vs 2000)",
+        "Reduced 0.5",
+        "Reduced 0.25",
+        "Reduced 0.1",
+        "Sliced 0 – 0.5",
+        "Sliced gen – 0.5",
+        "Sliced 0 – 0.25",
+        "Sliced gen – 0.25",
+        "Sliced 0 – 0.1",
+        "Sliced gen – 0.1",
+    ]
+
+    dataset_to_marker = {
+        "Full (200 vs 2000)": "o",
+        "Reduced 0.5": "s",
+        "Reduced 0.25": "D",
+        "Reduced 0.1": "P",
+        "Sliced 0 – 0.5": "^",
+        "Sliced gen – 0.5": "v",
+        "Sliced 0 – 0.25": "<",
+        "Sliced gen – 0.25": ">",
+        "Sliced 0 – 0.1": "p",
+        "Sliced gen – 0.1": "*",
+    }
+
+    dataset_colors = [
+        "blue", "orange", "green", "gray", "red",  
+        "purple", "brown", "pink", "cyan", "magenta"
+    ]
+
+    dataset_to_code = {d: i for i, d in enumerate(dataset_order)}
+
+    # ------------------------------------------------------------------
+    # Assemble long dataframe
+    # ------------------------------------------------------------------
+    dfs = []
+    for f in feature_name_list:
+        dfs.extend([
+            prepare(df_differences_full, f, dataset_order[0]),
+            prepare(df_differences_reduced_05, f, dataset_order[1]),
+            prepare(df_differences_reduced_025, f, dataset_order[2]),
+            prepare(df_differences_reduced_01, f, dataset_order[3]),
+            prepare(df_differences_slices_0_05, f, dataset_order[4]),
+            prepare(df_differences_slices_gen_05, f, dataset_order[5]),
+            prepare(df_differences_slices_0_025, f, dataset_order[6]),
+            prepare(df_differences_slices_gen_025, f, dataset_order[7]),
+            prepare(df_differences_slices_0_01, f, dataset_order[8]),
+            prepare(df_differences_slices_gen_01, f, dataset_order[9]),
+        ])
+
+    df = pd.concat(dfs, ignore_index=True)
+
+    # ------------------------------------------------------------------
+    # Aggregate + distances
+    # ------------------------------------------------------------------
+    df_agg = (
+        df.groupby(["feature", "function_idx", "dataset"])
+        .agg(agg)
+        .reset_index()
+    )
+    df_agg["abs_ratio"] = df_agg["ratio"].abs()
+
+    # ------------------------------------------------------------------
+    # Winner + second-best per (function, feature)
+    # ------------------------------------------------------------------
+    top2 = (
+        df_agg
+        .sort_values(["function_idx", "feature", "abs_ratio"])
+        .groupby(["function_idx", "feature"])
+        .head(2)
+        .assign(rank=lambda d: d.groupby(["function_idx", "feature"]).cumcount() + 1)
+    )
+
+    df_winner = (
+        top2[top2["rank"] == 1]
+        .rename(columns={"dataset": "winner"})
+        [["function_idx", "feature", "winner"]]
+    )
+
+    df_second = (
+        top2[top2["rank"] == 2]
+        .rename(columns={"dataset": "second"})
+        [["function_idx", "feature", "second"]]
+    )
+
+    # ------------------------------------------------------------------
+    # Importance ranking (per feature)
+    # ------------------------------------------------------------------
+    df_score = (
+        df_agg.groupby(["function_idx", "feature"])["ratio"]
+        .apply(lambda x: np.median(np.abs(x)))
+        .rename("score")
+        .reset_index()
+    )
+
+    df_score["rank"] = (
+        df_score.groupby("feature")["score"]
+        .rank(method="dense", ascending=False)
+    )
+
+    df_ranked = (
+        df_score
+        .merge(df_winner, on=["function_idx", "feature"])
+        .merge(df_second, on=["function_idx", "feature"], how="left")
+    )
+
+    df_ranked["winner_code"] = df_ranked["winner"].map(dataset_to_code)
+    df_ranked["second_marker"] = df_ranked["second"].map(dataset_to_marker)
+
+    # ------------------------------------------------------------------
+    # Heatmap matrix + ordering
+    # ------------------------------------------------------------------
+    heatmap = df_ranked.pivot(
+        index="function_idx",
+        columns="feature",
+        values="winner_code",
+    )
+
+    function_order = (
+        df_ranked.groupby("function_idx")["rank"]
+        .mean()
+        .sort_values()
+        .index
+    )
+
+    heatmap = heatmap.loc[function_order]
+
+    heatmap = heatmap[feature_name_list]
+
+    heatmap = heatmap.reindex(index=function_id_list)
+
+
+
+    # ------------------------------------------------------------------
+    # Plot
+    # ------------------------------------------------------------------
+    cmap = ListedColormap(dataset_colors)
+    norm = BoundaryNorm(
+        np.arange(-0.5, len(dataset_colors) + 0.5, 1),
+        cmap.N,
+    )
+
+    fig, ax = plt.subplots(
+        figsize=(0.3 * heatmap.shape[1], 0.5 * heatmap.shape[0])
+    )
+
+    sns.heatmap(
+        heatmap,
+        cmap=cmap,
+        norm=norm,
+        linewidths=0.3,
+        cbar=False,
+        ax=ax,
+    )
+
+    # ------------------------------------------------------------------
+    # Overlay runner-up symbols
+    # ------------------------------------------------------------------
+    feature_to_x = {f: i for i, f in enumerate(heatmap.columns)}
+    function_to_y = {f: i for i, f in enumerate(heatmap.index)}
+
+    for _, r in df_ranked.iterrows():
+        if pd.isna(r["second_marker"]):
+            continue
+        if r["feature"] not in feature_to_x:
+            continue
+        if r["function_idx"] not in function_to_y:
+            continue
+
+        ax.scatter(
+            feature_to_x[r["feature"]] + 0.5,
+            function_to_y[r["function_idx"]] + 0.5,
+            marker=r["second_marker"],
+            s=60,
+            facecolors="none",
+            edgecolors="black",
+            linewidths=1,
+            zorder=10,
+        )
+
+    ax.set_xlabel("Feature")
+    ax.set_ylabel("Function")
+
+    # ------------------------------------------------------------------
+    # Legends
+    # ------------------------------------------------------------------
+    color_legend = ax.legend(
+        handles=[
+            Patch(color=dataset_colors[i], label=dataset_order[i])
+            for i in range(len(dataset_order))
+        ],
+        title="Dataset closest to 0",
+        bbox_to_anchor=(1.02, 1),
+        loc="upper left",
+    )
+    ax.add_artist(color_legend)
+
+    ax.legend(
+        handles=[
+            Line2D(
+                [0], [0],
+                marker=m,
+                color="black",
+                linestyle="None",
+                markerfacecolor="none",
+                markersize=8,
+                label=ds,
+            )
+            for ds, m in dataset_to_marker.items()
+        ],
+        title="Second-closest dataset",
+        bbox_to_anchor=(1.02, 0.1),
+        loc="upper left",
+    )
+
+    plt.tight_layout()
+    return fig, ax
+
 
 
 
@@ -956,7 +1207,6 @@ def main() -> None:
         agg="median"
     )
 
-    # Get the differences between full and reduced datasets
     df_differences_reduced_01 = compute_differences_in_reduced(
         datasets[("full", 2000, None)],
         #datasets[("reduced", 200, 0.5)],
@@ -994,7 +1244,6 @@ def main() -> None:
         agg="median"
     )
 
-    # Get the differences between full and slices datasets
     df_differences_slices_0_01 = compute_differences_in_slices_0(
         datasets[("full", 2000, None)],
         datasets[("slices", 200, 0.1)],
@@ -1010,132 +1259,34 @@ def main() -> None:
     )
 
 
-
-    #fig, ax = box_plots_of_differences(
-    #        df_differences_full,
-    #        df_differences_reduced_05,
-    #        all_feature_names,
-    #        function_id =20,
-    #    )
-    
+    # Run the function as a test
+    fig, ax = violin_plots_of_differences_global_2_heatmap(
+        df_differences_full,
+        df_differences_reduced_05,
+        df_differences_reduced_025,
+        df_differences_reduced_01,
+        df_differences_slices_0_05,
+        df_differences_slices_gen_05,
+        df_differences_slices_0_025,
+        df_differences_slices_gen_025,
+        df_differences_slices_0_01,
+        df_differences_slices_gen_01,
+        feature_name_list=all_feature_names,
+        function_id_list=FUNCTION_IDS,
+        instance_id_list=INSTANCE_IDS,
+        agg="median",
+    )
 
     #plt.show()
 
-    # Get the plot
+    str_file_path = SAVE_FIGURE_DIRECTORY / "violin_plots_of_differences_global_2_heatmap.pdf"
+    str_file_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(
+        str_file_path,
+        dpi=600,
+        bbox_inches="tight",
+    )
 
-    for function_id in FUNCTION_IDS:
-        for feature_name in all_feature_names:
-            fig, ax = violin_plots_of_differences_global_2(
-                df_differences_full,
-                df_differences_reduced_05,
-                df_differences_reduced_025,
-                df_differences_reduced_01,
-                df_differences_slices_0_05,
-                df_differences_slices_gen_05,
-                df_differences_slices_0_025,
-                df_differences_slices_gen_025,
-                df_differences_slices_0_01,
-                df_differences_slices_gen_01,
-                feature_name,
-                function_id,
-            )
-
-            figure_path = (
-            SAVE_FIGURE_DIRECTORY
-            / f"function_id_{function_id}"
-            / f"feature_{feature_name}"
-            )
-
-            figure_path.mkdir(parents=True, exist_ok=True)
-            fig.savefig(
-            figure_path / "violin_plot_comparison_all_variants.pdf",
-            dpi=300,
-            #bbox_inches="tight",
-            )
-
-            plt.close(fig)
-
-    # for function_id in FUNCTION_IDS:
-    #     fig, ax = box_plots_of_differences(
-    #         df_differences_full,
-    #         df_differences_reduced_05,
-    #         all_feature_names,
-    #         function_id =function_id,
-    #     )
-
-    #     figure_path = (
-    #     SAVE_FIGURE_DIRECTORY
-    #     / f"function_id_{function_id}"
-    #     / f"comparison_full_vs_reduced"
-    #     )
-
-    #     figure_path.mkdir(parents=True, exist_ok=True)
-    #     fig.savefig(
-    #     figure_path / "box_plot_comparison_full_vs_reduced.pdf",
-    #     dpi=300,
-    #     #bbox_inches="tight",
-    #     )
-
-    #     plt.close(fig)
-
-
-
-    a = 1
-
-
-    # for function_id in FUNCTION_IDS:
-    #     print(f"Processing function ID: {function_id}")
-
-
-    #     for feature_name in all_feature_names:
-    #         print(f"Processing feature: {feature_name}")
-
-    #     for n_samples in DATA_SIZES:
-    #         for ratio in REDUCTION_RATIOS:
-    #             print(f"Processing feature: {feature_name}")
-
-    #             df_full = datasets[("full", n_samples, None)]
-    #             df_reduced = datasets[("reduced", n_samples, ratio)]
-
-    #             if n_samples == 200 and ratio == 0.25:
-    #                 continue
-
-    #             plot_color = "skyblue"
-
-
-    #             #fig, ax = plot_violin_plots_biased_3_v2(
-    #             #df_full,
-    #             #df_reduced,
-    #             #feature_name_list=all_feature_names,
-    #             #reduction_ratio=ratio,
-    #             #data_size=n_samples,
-    #             #function_id=function_id,
-    #             #instance_id_list=INSTANCE_IDS,
-    #             #show_fig=False,
-    #             #fig_size=(16, 3),
-    #             #plot_color=plot_color,
-    #             #)
-
-
-    #             if fig is None:
-    #                 continue
-
-
-    #             figure_path = (
-    #             SAVE_FIGURE_DIRECTORY
-    #             / f"function_id_{function_id}"
-    #             / f"reduction_ratio_{ratio}"
-    #             / f"n_samples_{n_samples}"
-    #             )
-    #             figure_path.mkdir(parents=True, exist_ok=True)
-
-
-    #             fig.savefig(
-    #             figure_path / "violin_plot_corrected.pdf",
-    #             dpi=300,
-    #             bbox_inches="tight",
-    #             )
-    #             plt.close(fig)
 
 
 if __name__ == "__main__":

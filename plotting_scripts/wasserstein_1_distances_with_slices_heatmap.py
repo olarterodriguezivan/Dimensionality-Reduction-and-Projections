@@ -4,6 +4,7 @@ import numpy as np
 import os, sys
 from pathlib import Path
 import matplotlib
+from matplotlib.colors import ListedColormap, BoundaryNorm
 
 from typing import Tuple, List
 
@@ -37,7 +38,7 @@ DATASET_200_CONSIDERED_SEEDS = [*range(1001,1041)] # Seeds to consider for DATAS
 EPSILON = 1e-9 # To avoid log(0) or ./0 issues
 
 ROOT_DIRECTORY = Path(__file__).resolve().parent
-SAVE_FIGURE_DIRECTORY = ROOT_DIRECTORY.joinpath("figures_violin_plots_wasserstein_distances")
+SAVE_FIGURE_DIRECTORY = ROOT_DIRECTORY.joinpath("figures_heatmap_wasserstein_distances")
 
 DATA_SIZES = [200, 2000]
 REDUCTION_RATIOS = [0.5, 0.25, 0.1]
@@ -535,6 +536,151 @@ def plot_violin_plots_wasserstein_distances_per_feature_function(df_wasserstein_
     return fig, ax
 
 
+def heatmap_wasserstein_rankings(
+    df_wasserstein_full,
+    df_wasserstein_reduced_05,
+    df_wasserstein_reduced_025,
+    df_wasserstein_reduced_01,
+    df_wasserstein_slices_0_05_0,
+    df_wasserstein_slices_0_05_gen,
+    df_wasserstein_slices_0_025_0,
+    df_wasserstein_slices_0_025_gen,
+    df_wasserstein_slices_0_01_0,
+    df_wasserstein_slices_0_01_gen,
+    feature_name_list,
+    function_id_list,
+    agg="median",
+):
+
+    # ---------------------------------------------------------
+    # 1) Prepare long dataframe
+    # ---------------------------------------------------------
+
+    dataset_order = [
+        "Full (200 vs 2000)",
+        "Reduced 0.5",
+        "Reduced 0.25",
+        "Reduced 0.1",
+        "Slices 0 – 0.5",
+        "Slices gen – 0.5",
+        "Slices 0 – 0.25",
+        "Slices gen – 0.25",
+        "Slices 0 – 0.1",
+        "Slices gen – 0.1",
+    ]
+
+    dataset_to_code = {d: i for i, d in enumerate(dataset_order)}
+
+    def prepare(df, label):
+        df2 = df.copy()
+        df2["dataset"] = label
+        return df2
+
+    df_all = pd.concat(
+        [
+            prepare(df_wasserstein_full, dataset_order[0]),
+            prepare(df_wasserstein_reduced_05, dataset_order[1]),
+            prepare(df_wasserstein_reduced_025, dataset_order[2]),
+            prepare(df_wasserstein_reduced_01, dataset_order[3]),
+            prepare(df_wasserstein_slices_0_05_0, dataset_order[4]),
+            prepare(df_wasserstein_slices_0_05_gen, dataset_order[5]),
+            prepare(df_wasserstein_slices_0_025_0, dataset_order[6]),
+            prepare(df_wasserstein_slices_0_025_gen, dataset_order[7]),
+            prepare(df_wasserstein_slices_0_01_0, dataset_order[8]),
+            prepare(df_wasserstein_slices_0_01_gen, dataset_order[9]),
+        ],
+        ignore_index=True,
+    )
+
+    df_all = df_all[
+        df_all["feature_name"].isin(feature_name_list)
+        & df_all["function_id"].isin(function_id_list)
+    ]
+
+    # ---------------------------------------------------------
+    # 2) Aggregate per (function, feature, dataset)
+    # ---------------------------------------------------------
+
+    df_agg = (
+        df_all
+        .groupby(["function_id", "feature_name", "dataset"])["wasserstein_distance"]
+        .agg(agg)
+        .reset_index()
+    )
+
+    # ---------------------------------------------------------
+    # 3) Rank datasets (LOWER is better)
+    # ---------------------------------------------------------
+
+    df_ranked = (
+        df_agg
+        .sort_values(["function_id", "feature_name", "wasserstein_distance"])
+        .groupby(["function_id", "feature_name"])
+        .apply(lambda x: x.assign(rank=np.arange(1, len(x) + 1)))
+        .reset_index(drop=True)
+    )
+
+    df_winner = df_ranked[df_ranked["rank"] == 1][
+        ["function_id", "feature_name", "dataset"]
+    ].rename(columns={"dataset": "winner"})
+
+    df_second = df_ranked[df_ranked["rank"] == 2][
+        ["function_id", "feature_name", "dataset"]
+    ].rename(columns={"dataset": "second"})
+
+    df_plot = df_winner.merge(
+        df_second,
+        on=["function_id", "feature_name"],
+        how="left",
+    )
+
+    df_plot["winner_code"] = df_plot["winner"].map(dataset_to_code)
+
+    # ---------------------------------------------------------
+    # 4) Pivot for heatmap
+    # ---------------------------------------------------------
+
+    heatmap = df_plot.pivot(
+        index="function_id",
+        columns="feature_name",
+        values="winner_code",
+    )
+
+    heatmap = heatmap.reindex(index=function_id_list)
+    heatmap = heatmap[feature_name_list]
+
+    # ---------------------------------------------------------
+    # 5) Plot
+    # ---------------------------------------------------------
+
+    cmap = ListedColormap(sns.color_palette("tab10", len(dataset_order)))
+    norm = BoundaryNorm(
+        np.arange(-0.5, len(dataset_order) + 0.5, 1),
+        cmap.N,
+    )
+
+    fig, ax = plt.subplots(
+        figsize=(0.3 * heatmap.shape[1], 0.5 * heatmap.shape[0])
+    )
+
+    sns.heatmap(
+        heatmap,
+        cmap=cmap,
+        norm=norm,
+        linewidths=0.3,
+        cbar=False,
+        ax=ax,
+    )
+
+    ax.set_xlabel("Feature")
+    ax.set_ylabel("Function")
+    ax.set_title("Best Variant per Feature/Function (Wasserstein Ranking)")
+
+    plt.tight_layout()
+
+    return fig, ax
+
+
 
 # -----------------------------------------------------------------------------
 # Main
@@ -608,38 +754,55 @@ def main() -> None:
         INSTANCE_IDS
     )
 
+    fig, ax = heatmap_wasserstein_rankings(
+    df_wasserstein_full,
+    df_wasserstein_reduced_05,
+    df_wasserstein_reduced_025,
+    df_wasserstein_reduced_01,
+    df_wasserstein_slices_0_05_0,
+    df_wasserstein_slices_0_05_gen,
+    df_wasserstein_slices_0_025_0,
+    df_wasserstein_slices_0_025_gen,
+    df_wasserstein_slices_0_01_0,
+    df_wasserstein_slices_0_01_gen,
+    all_feature_names,
+    FUNCTION_IDS,
+    )
+
+    fig.savefig("wasserstein_ranking_heatmap.pdf", dpi=300)
+
     # Now we have all the Wasserstein distance DataFrames computed, we can proceed to plotting them.
-    for function_id in FUNCTION_IDS:
-        for feature_name in all_feature_names:
-            fig, ax = plot_violin_plots_wasserstein_distances_per_feature_function(
-                df_wasserstein_full,
-                df_wasserstein_reduced_05,
-                df_wasserstein_reduced_025,
-                df_wasserstein_reduced_01,
-                df_wasserstein_slices_0_05_0,
-                df_wasserstein_slices_0_05_gen,
-                df_wasserstein_slices_0_025_0,
-                df_wasserstein_slices_0_025_gen,
-                df_wasserstein_slices_0_01_0,
-                df_wasserstein_slices_0_01_gen,
-                feature_name,
-                function_id,
-            )
+    # for function_id in FUNCTION_IDS:
+    #     for feature_name in all_feature_names:
+    #         fig, ax = plot_violin_plots_wasserstein_distances_per_feature_function(
+    #             df_wasserstein_full,
+    #             df_wasserstein_reduced_05,
+    #             df_wasserstein_reduced_025,
+    #             df_wasserstein_reduced_01,
+    #             df_wasserstein_slices_0_05_0,
+    #             df_wasserstein_slices_0_05_gen,
+    #             df_wasserstein_slices_0_025_0,
+    #             df_wasserstein_slices_0_025_gen,
+    #             df_wasserstein_slices_0_01_0,
+    #             df_wasserstein_slices_0_01_gen,
+    #             feature_name,
+    #             function_id,
+    #         )
 
-            figure_path = (
-            SAVE_FIGURE_DIRECTORY
-            / f"function_id_{function_id}"
-            / f"feature_{feature_name}"
-            )
+    #         figure_path = (
+    #         SAVE_FIGURE_DIRECTORY
+    #         / f"function_id_{function_id}"
+    #         / f"feature_{feature_name}"
+    #         )
 
-            figure_path.mkdir(parents=True, exist_ok=True)
-            fig.savefig(
-            figure_path / "violin_plot_comparison_all_variants.pdf",
-            dpi=300,
-            #bbox_inches="tight",
-            )
+    #         figure_path.mkdir(parents=True, exist_ok=True)
+    #         fig.savefig(
+    #         figure_path / "violin_plot_comparison_all_variants.pdf",
+    #         dpi=300,
+    #         #bbox_inches="tight",
+    #         )
 
-            plt.close(fig)
+    #         plt.close(fig)
 
 
 
