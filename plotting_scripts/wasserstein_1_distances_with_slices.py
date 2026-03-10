@@ -166,6 +166,38 @@ def choose_reduced_feature_file_slice(data_size:int, reduction_ratio:float, slic
     else:
         raise ValueError("Unsupported combination of DATASET_SIZE and REDUCTION_RATIO")
 
+def choose_reduced_feature_file_slice_all_in(data_size:int, reduction_ratio:float, slice_id:int) -> str:
+    r"""
+    This function chooses the appropriate reduced feature dataset file based on the data size, reduction ratio, and slice ID,
+    which are the all in versions of the slice datasets (i.e. they have one slice/group pairing so all the samples lie 
+    in the same slice).
+
+    Args
+    --------------
+    data_size (int): The size of the dataset (e.g., 200 or 2000).
+    reduction_ratio (float): The reduction ratio (e.g., 0.25 or 0.5).
+    slice_id (int): The slice ID.
+
+    Returns
+    --------------
+    str: The filename of the reduced feature dataset corresponding to the given data size, reduction ratio, and slice ID.
+
+    """
+    if data_size == 200 and reduction_ratio == 0.25:
+        return f"slices_{data_size}_all_in_{reduction_ratio}.parquet"
+    elif data_size == 200 and reduction_ratio == 0.5:
+        return f"slices_{data_size}_all_in_{reduction_ratio}.parquet"
+    elif data_size == 200 and reduction_ratio == 0.1:
+        return f"slices_{data_size}_all_in_{reduction_ratio}.parquet"
+    elif data_size == 2000 and reduction_ratio == 0.25:
+        raise FileNotFoundError("No slice datasets for DATASET_SIZE = 2000 and REDUCTION_RATIO = 0.25")
+    elif data_size == 2000 and reduction_ratio == 0.5:
+        raise FileNotFoundError("No slice datasets for DATASET_SIZE = 2000 and REDUCTION_RATIO = 0.5")
+    elif data_size == 2000 and reduction_ratio == 0.1:
+        raise FileNotFoundError("No slice datasets for DATASET_SIZE = 2000 and REDUCTION_RATIO = 0.1")
+    else:
+        raise ValueError("Unsupported combination of DATASET_SIZE and REDUCTION_RATIO")
+
 def load_dataset_as_pd_df(file_path:str) -> pd.DataFrame:
     r"""
     Load a dataset from a given file path into a pandas DataFrame.
@@ -327,6 +359,12 @@ def load_all_datasets():
                 datasets[("slices", n_samples, ratio)] = process_slice_dataframe(
                 load_dataset_as_pd_df(slice_file), n_samples
                 )
+            
+            if n_samples == 200:
+                slice_all_in_file = choose_reduced_feature_file_slice_all_in(n_samples, ratio, slice_id=0)
+                datasets[("slices_all_in", n_samples, ratio)] = process_slice_dataframe(
+                load_dataset_as_pd_df(slice_all_in_file), n_samples
+                )
 
 
     return datasets
@@ -446,6 +484,12 @@ def plot_violin_plots_wasserstein_distances_per_feature_function(df_wasserstein_
                                                                         df_wasserstein_slices_0_025_gen:pd.DataFrame,
                                                                         df_wasserstein_slices_0_01_0:pd.DataFrame,
                                                                         df_wasserstein_slices_0_01_gen:pd.DataFrame,
+                                                                        df_wasserstein_slices_all_in_0_05_0:pd.DataFrame,
+                                                                        df_wasserstein_slices_all_in_0_05_gen:pd.DataFrame,
+                                                                        df_wasserstein_slices_all_in_0_025_0:pd.DataFrame,
+                                                                        df_wasserstein_slices_all_in_0_025_gen:pd.DataFrame,
+                                                                        df_wasserstein_slices_all_in_0_01_0:pd.DataFrame,
+                                                                        df_wasserstein_slices_all_in_0_01_gen:pd.DataFrame,
                                                                         feature_name:str,
                                                                         function_id:int,
                                                                         ) -> Tuple[plt.Figure, plt.Axes]:
@@ -464,6 +508,12 @@ def plot_violin_plots_wasserstein_distances_per_feature_function(df_wasserstein_
         df_wasserstein_slices_0_025_gen (pd.DataFrame): DataFrame containing Wasserstein distances for the combined slices of the slice dataset with 25% reduction.
         df_wasserstein_slices_0_01_0 (pd.DataFrame): DataFrame containing Wasserstein distances for slice 0 of the slice dataset with 10% reduction.
         df_wasserstein_slices_0_01_gen (pd.DataFrame): DataFrame containing Wasserstein distances for the combined slices of the slice dataset with 10% reduction.      
+        df_wasserstein_slices_all_in_0_05_0 (pd.DataFrame): DataFrame containing Wasserstein distances for slice 0 of the all-in slice dataset with 50% reduction.
+        df_wasserstein_slices_all_in_0_05_gen (pd.DataFrame): DataFrame containing Wasserstein distances for the combined slices of the all-in slice dataset with 50% reduction.
+        df_wasserstein_slices_all_in_0_025_0 (pd.DataFrame): DataFrame containing Wasserstein distances for slice 0 of the all-in slice dataset with 25% reduction.
+        df_wasserstein_slices_all_in_0_025_gen (pd.DataFrame): DataFrame containing Wasserstein distances for the combined slices of the all-in slice dataset with 25% reduction.
+        df_wasserstein_slices_all_in_0_01_0 (pd.DataFrame): DataFrame containing Wasserstein distances for slice 0 of the all-in slice dataset with 10% reduction.
+        df_wasserstein_slices_all_in_0_01_gen (pd.DataFrame): DataFrame containing Wasserstein distances for the combined slices of the all-in slice dataset with 10% reduction.
         feature_name (str): The name of the feature to plot.
         function_id (int): The function ID to plot.
     
@@ -493,6 +543,12 @@ def plot_violin_plots_wasserstein_distances_per_feature_function(df_wasserstein_
             _filter(df_wasserstein_slices_0_025_gen, "Slices 0.25 (gen)"),
             _filter(df_wasserstein_slices_0_01_0, "Slices 0.1 (slice 0)"),
             _filter(df_wasserstein_slices_0_01_gen, "Slices 0.1 (gen)"),
+            _filter(df_wasserstein_slices_all_in_0_05_0, "Slices All-In 0.5 (slice 0)"),
+            _filter(df_wasserstein_slices_all_in_0_05_gen, "Slices All-In 0.5 (gen)"),
+            _filter(df_wasserstein_slices_all_in_0_025_0, "Slices All-In 0.25 (slice 0)"),
+            _filter(df_wasserstein_slices_all_in_0_025_gen, "Slices All-In 0.25 (gen)"),
+            _filter(df_wasserstein_slices_all_in_0_01_0, "Slices All-In 0.1 (slice 0)"),
+            _filter(df_wasserstein_slices_all_in_0_01_gen, "Slices All-In 0.1 (gen)"),
         ],
         ignore_index=True,
     )
@@ -608,6 +664,30 @@ def main() -> None:
         INSTANCE_IDS
     )
 
+    df_wasserstein_slices_all_in_0_05_0, df_wasserstein_slices_all_in_0_05_gen = compute_wasserstein_distance_slices(
+        datasets[("full", 2000, None)],
+        datasets[("slices_all_in", 200, 0.5)],
+        all_feature_names,
+        FUNCTION_IDS,
+        INSTANCE_IDS
+    )
+
+    df_wasserstein_slices_all_in_0_025_0, df_wasserstein_slices_all_in_0_025_gen = compute_wasserstein_distance_slices(
+        datasets[("full", 2000, None)],
+        datasets[("slices_all_in", 200, 0.25)],
+        all_feature_names,
+        FUNCTION_IDS,
+        INSTANCE_IDS
+    )
+
+    df_wasserstein_slices_all_in_0_01_0, df_wasserstein_slices_all_in_0_01_gen = compute_wasserstein_distance_slices(
+        datasets[("full", 2000, None)],
+        datasets[("slices_all_in", 200, 0.1)],
+        all_feature_names,
+        FUNCTION_IDS,
+        INSTANCE_IDS
+    )
+
     # Now we have all the Wasserstein distance DataFrames computed, we can proceed to plotting them.
     for function_id in FUNCTION_IDS:
         for feature_name in all_feature_names:
@@ -622,6 +702,12 @@ def main() -> None:
                 df_wasserstein_slices_0_025_gen,
                 df_wasserstein_slices_0_01_0,
                 df_wasserstein_slices_0_01_gen,
+                df_wasserstein_slices_all_in_0_05_0,
+                df_wasserstein_slices_all_in_0_05_gen,
+                df_wasserstein_slices_all_in_0_025_0,
+                df_wasserstein_slices_all_in_0_025_gen,
+                df_wasserstein_slices_all_in_0_01_0,
+                df_wasserstein_slices_all_in_0_01_gen,
                 feature_name,
                 function_id,
             )

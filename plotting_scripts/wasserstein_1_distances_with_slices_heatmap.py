@@ -5,6 +5,8 @@ import os, sys
 from pathlib import Path
 import matplotlib
 from matplotlib.colors import ListedColormap, BoundaryNorm
+from matplotlib.patches import Patch
+from matplotlib.lines import Line2D
 
 from typing import Tuple, List
 
@@ -158,6 +160,38 @@ def choose_reduced_feature_file_slice(data_size:int, reduction_ratio:float, slic
         return f"slices_{data_size}_{reduction_ratio}.parquet"
     elif data_size == 200 and reduction_ratio == 0.1:
         return f"slices_{data_size}_{reduction_ratio}.parquet"
+    elif data_size == 2000 and reduction_ratio == 0.25:
+        raise FileNotFoundError("No slice datasets for DATASET_SIZE = 2000 and REDUCTION_RATIO = 0.25")
+    elif data_size == 2000 and reduction_ratio == 0.5:
+        raise FileNotFoundError("No slice datasets for DATASET_SIZE = 2000 and REDUCTION_RATIO = 0.5")
+    elif data_size == 2000 and reduction_ratio == 0.1:
+        raise FileNotFoundError("No slice datasets for DATASET_SIZE = 2000 and REDUCTION_RATIO = 0.1")
+    else:
+        raise ValueError("Unsupported combination of DATASET_SIZE and REDUCTION_RATIO")
+
+def choose_reduced_feature_file_slice_all_in(data_size:int, reduction_ratio:float, slice_id:int) -> str:
+    r"""
+    This function chooses the appropriate reduced feature dataset file based on the data size, reduction ratio, and slice ID,
+    which are the all in versions of the slice datasets (i.e. they have one slice/group pairing so all the samples lie 
+    in the same slice).
+
+    Args
+    --------------
+    data_size (int): The size of the dataset (e.g., 200 or 2000).
+    reduction_ratio (float): The reduction ratio (e.g., 0.25 or 0.5).
+    slice_id (int): The slice ID.
+
+    Returns
+    --------------
+    str: The filename of the reduced feature dataset corresponding to the given data size, reduction ratio, and slice ID.
+
+    """
+    if data_size == 200 and reduction_ratio == 0.25:
+        return f"slices_{data_size}_all_in_{reduction_ratio}.parquet"
+    elif data_size == 200 and reduction_ratio == 0.5:
+        return f"slices_{data_size}_all_in_{reduction_ratio}.parquet"
+    elif data_size == 200 and reduction_ratio == 0.1:
+        return f"slices_{data_size}_all_in_{reduction_ratio}.parquet"
     elif data_size == 2000 and reduction_ratio == 0.25:
         raise FileNotFoundError("No slice datasets for DATASET_SIZE = 2000 and REDUCTION_RATIO = 0.25")
     elif data_size == 2000 and reduction_ratio == 0.5:
@@ -327,6 +361,12 @@ def load_all_datasets():
                 slice_file = choose_reduced_feature_file_slice(n_samples, ratio, slice_id=0)
                 datasets[("slices", n_samples, ratio)] = process_slice_dataframe(
                 load_dataset_as_pd_df(slice_file), n_samples
+                )
+            
+            if n_samples == 200:
+                slice_all_in_file = choose_reduced_feature_file_slice_all_in(n_samples, ratio, slice_id=0)
+                datasets[("slices_all_in", n_samples, ratio)] = process_slice_dataframe(
+                load_dataset_as_pd_df(slice_all_in_file), n_samples
                 )
 
 
@@ -547,6 +587,12 @@ def heatmap_wasserstein_rankings(
     df_wasserstein_slices_0_025_gen,
     df_wasserstein_slices_0_01_0,
     df_wasserstein_slices_0_01_gen,
+    df_wasserstein_slices_all_in_0_05_0,
+    df_wasserstein_slices_all_in_0_05_gen,
+    df_wasserstein_slices_all_in_0_025_0,
+    df_wasserstein_slices_all_in_0_025_gen,
+    df_wasserstein_slices_all_in_0_01_0,
+    df_wasserstein_slices_all_in_0_01_gen,
     feature_name_list,
     function_id_list,
     agg="median",
@@ -561,15 +607,36 @@ def heatmap_wasserstein_rankings(
         "Reduced 0.5",
         "Reduced 0.25",
         "Reduced 0.1",
-        "Slices 0 – 0.5",
-        "Slices gen – 0.5",
-        "Slices 0 – 0.25",
-        "Slices gen – 0.25",
-        "Slices 0 – 0.1",
-        "Slices gen – 0.1",
+        "Sliced 0 – 0.5",
+        "Sliced gen – 0.5",
+        "Sliced 0 – 0.25",
+        "Sliced gen – 0.25",
+        "Sliced 0 – 0.1",
+        "Sliced gen – 0.1",
+        "Sliced 0 all in – 0.5",
+        "Sliced gen all in – 0.5",
+        "Sliced 0 all in – 0.25",
+        "Sliced gen all in – 0.25",
+        "Sliced 0 all in – 0.1",
+        "Sliced gen all in – 0.1",
     ]
 
-    dataset_to_code = {d: i for i, d in enumerate(dataset_order)}
+    # 16 unique markers
+    markers = [
+        "o", "s", "D", "^", "v", "<", ">", "P",
+        "X", "*", "h", "H", "8", "p", "d", "|"
+    ]
+
+    # 16 distinct colors
+    dataset_colors = plt.get_cmap("tab20").colors[:len(dataset_order)]
+
+    dataset_to_marker = {
+        ds: markers[i] for i, ds in enumerate(dataset_order)
+    }
+
+    dataset_to_code = {
+        ds: i for i, ds in enumerate(dataset_order)
+    }
 
     def prepare(df, label):
         df2 = df.copy()
@@ -588,6 +655,12 @@ def heatmap_wasserstein_rankings(
             prepare(df_wasserstein_slices_0_025_gen, dataset_order[7]),
             prepare(df_wasserstein_slices_0_01_0, dataset_order[8]),
             prepare(df_wasserstein_slices_0_01_gen, dataset_order[9]),
+            prepare(df_wasserstein_slices_all_in_0_05_0, dataset_order[10]),
+            prepare(df_wasserstein_slices_all_in_0_05_gen, dataset_order[11]),
+            prepare(df_wasserstein_slices_all_in_0_025_0, dataset_order[12]),
+            prepare(df_wasserstein_slices_all_in_0_025_gen, dataset_order[13]),
+            prepare(df_wasserstein_slices_all_in_0_01_0, dataset_order[14]),
+            prepare(df_wasserstein_slices_all_in_0_01_gen, dataset_order[15]),
         ],
         ignore_index=True,
     )
@@ -598,7 +671,7 @@ def heatmap_wasserstein_rankings(
     ]
 
     # ---------------------------------------------------------
-    # 2) Aggregate per (function, feature, dataset)
+    # 2) Aggregate
     # ---------------------------------------------------------
 
     df_agg = (
@@ -609,15 +682,14 @@ def heatmap_wasserstein_rankings(
     )
 
     # ---------------------------------------------------------
-    # 3) Rank datasets (LOWER is better)
+    # 3) Rank (LOWER is better)
     # ---------------------------------------------------------
 
     df_ranked = (
         df_agg
         .sort_values(["function_id", "feature_name", "wasserstein_distance"])
-        .groupby(["function_id", "feature_name"])
+        .groupby(["function_id", "feature_name"], group_keys=False)
         .apply(lambda x: x.assign(rank=np.arange(1, len(x) + 1)))
-        .reset_index(drop=True)
     )
 
     df_winner = df_ranked[df_ranked["rank"] == 1][
@@ -635,9 +707,10 @@ def heatmap_wasserstein_rankings(
     )
 
     df_plot["winner_code"] = df_plot["winner"].map(dataset_to_code)
+    df_plot["second_marker"] = df_plot["second"].map(dataset_to_marker)
 
     # ---------------------------------------------------------
-    # 4) Pivot for heatmap
+    # 4) Pivot
     # ---------------------------------------------------------
 
     heatmap = df_plot.pivot(
@@ -650,12 +723,12 @@ def heatmap_wasserstein_rankings(
     heatmap = heatmap[feature_name_list]
 
     # ---------------------------------------------------------
-    # 5) Plot
+    # Plot
     # ---------------------------------------------------------
 
-    cmap = ListedColormap(sns.color_palette("tab10", len(dataset_order)))
+    cmap = ListedColormap(dataset_colors)
     norm = BoundaryNorm(
-        np.arange(-0.5, len(dataset_order) + 0.5, 1),
+        np.arange(-0.5, len(dataset_colors) + 0.5, 1),
         cmap.N,
     )
 
@@ -672,13 +745,74 @@ def heatmap_wasserstein_rankings(
         ax=ax,
     )
 
+    # ---------------------------------------------------------
+    # Overlay runner-up markers
+    # ---------------------------------------------------------
+
+    feature_to_x = {f: i for i, f in enumerate(heatmap.columns)}
+    function_to_y = {f: i for i, f in enumerate(heatmap.index)}
+
+    for _, r in df_plot.iterrows():
+
+        if pd.isna(r["second_marker"]):
+            continue
+
+        if r["feature_name"] not in feature_to_x:
+            continue
+
+        if r["function_id"] not in function_to_y:
+            continue
+
+        ax.scatter(
+            feature_to_x[r["feature_name"]] + 0.5,
+            function_to_y[r["function_id"]] + 0.5,
+            marker=r["second_marker"],
+            s=60,
+            facecolors="none",
+            edgecolors="black",
+            linewidths=1,
+            zorder=10,
+        )
+
     ax.set_xlabel("Feature")
     ax.set_ylabel("Function")
-    ax.set_title("Best Variant per Feature/Function (Wasserstein Ranking)")
+
+    # ---------------------------------------------------------
+    # Legends
+    # ---------------------------------------------------------
+
+    color_legend = ax.legend(
+        handles=[
+            Patch(color=dataset_colors[i], label=dataset_order[i])
+            for i in range(len(dataset_order))
+        ],
+        title="Best (lowest Wasserstein)",
+        bbox_to_anchor=(1.02, 1),
+        loc="upper left",
+    )
+    ax.add_artist(color_legend)
+
+    ax.legend(
+        handles=[
+            Line2D(
+                [0], [0],
+                marker=m,
+                color="black",
+                linestyle="None",
+                markerfacecolor="none",
+                markersize=8,
+                label=ds,
+            )
+            for ds, m in dataset_to_marker.items()
+        ],
+        title="Second-best",
+        bbox_to_anchor=(1.02, 0.1),
+        loc="upper left",
+    )
 
     plt.tight_layout()
-
     return fig, ax
+
 
 
 
@@ -754,6 +888,33 @@ def main() -> None:
         INSTANCE_IDS
     )
 
+    df_wasserstein_slices_all_in_0_05_0, df_wasserstein_slices_all_in_0_05_gen = compute_wasserstein_distance_slices(
+        datasets[("full", 2000, None)],
+        datasets[("slices_all_in", 200, 0.5)],
+        all_feature_names,
+        FUNCTION_IDS,
+        INSTANCE_IDS
+    )
+
+    df_wasserstein_slices_all_in_0_025_0, df_wasserstein_slices_all_in_0_025_gen = compute_wasserstein_distance_slices(
+        datasets[("full", 2000, None)],
+        datasets[("slices_all_in", 200, 0.25)],
+        all_feature_names,
+        FUNCTION_IDS,
+        INSTANCE_IDS
+    )
+
+    df_wasserstein_slices_all_in_0_01_0, df_wasserstein_slices_all_in_0_01_gen = compute_wasserstein_distance_slices(
+        datasets[("full", 2000, None)],
+        datasets[("slices_all_in", 200, 0.1)],
+        all_feature_names,
+        FUNCTION_IDS,
+        INSTANCE_IDS
+    )
+
+
+
+
     fig, ax = heatmap_wasserstein_rankings(
     df_wasserstein_full,
     df_wasserstein_reduced_05,
@@ -765,6 +926,12 @@ def main() -> None:
     df_wasserstein_slices_0_025_gen,
     df_wasserstein_slices_0_01_0,
     df_wasserstein_slices_0_01_gen,
+    df_wasserstein_slices_all_in_0_05_0,
+    df_wasserstein_slices_all_in_0_05_gen,
+    df_wasserstein_slices_all_in_0_025_0,
+    df_wasserstein_slices_all_in_0_025_gen,
+    df_wasserstein_slices_all_in_0_01_0,
+    df_wasserstein_slices_all_in_0_01_gen,
     all_feature_names,
     FUNCTION_IDS,
     )

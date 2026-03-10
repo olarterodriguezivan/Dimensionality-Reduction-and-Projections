@@ -169,6 +169,38 @@ def choose_reduced_feature_file_slice(data_size:int, reduction_ratio:float, slic
     else:
         raise ValueError("Unsupported combination of DATASET_SIZE and REDUCTION_RATIO")
 
+def choose_reduced_feature_file_slice_all_in(data_size:int, reduction_ratio:float, slice_id:int) -> str:
+    r"""
+    This function chooses the appropriate reduced feature dataset file based on the data size, reduction ratio, and slice ID,
+    which are the all in versions of the slice datasets (i.e. they have one slice/group pairing so all the samples lie 
+    in the same slice).
+
+    Args
+    --------------
+    data_size (int): The size of the dataset (e.g., 200 or 2000).
+    reduction_ratio (float): The reduction ratio (e.g., 0.25 or 0.5).
+    slice_id (int): The slice ID.
+
+    Returns
+    --------------
+    str: The filename of the reduced feature dataset corresponding to the given data size, reduction ratio, and slice ID.
+
+    """
+    if data_size == 200 and reduction_ratio == 0.25:
+        return f"slices_{data_size}_all_in_{reduction_ratio}.parquet"
+    elif data_size == 200 and reduction_ratio == 0.5:
+        return f"slices_{data_size}_all_in_{reduction_ratio}.parquet"
+    elif data_size == 200 and reduction_ratio == 0.1:
+        return f"slices_{data_size}_all_in_{reduction_ratio}.parquet"
+    elif data_size == 2000 and reduction_ratio == 0.25:
+        raise FileNotFoundError("No slice datasets for DATASET_SIZE = 2000 and REDUCTION_RATIO = 0.25")
+    elif data_size == 2000 and reduction_ratio == 0.5:
+        raise FileNotFoundError("No slice datasets for DATASET_SIZE = 2000 and REDUCTION_RATIO = 0.5")
+    elif data_size == 2000 and reduction_ratio == 0.1:
+        raise FileNotFoundError("No slice datasets for DATASET_SIZE = 2000 and REDUCTION_RATIO = 0.1")
+    else:
+        raise ValueError("Unsupported combination of DATASET_SIZE and REDUCTION_RATIO")
+
 def load_dataset_as_pd_df(file_path:str) -> pd.DataFrame:
     r"""
     Load a dataset from a given file path into a pandas DataFrame.
@@ -329,6 +361,12 @@ def load_all_datasets():
                 slice_file = choose_reduced_feature_file_slice(n_samples, ratio, slice_id=0)
                 datasets[("slices", n_samples, ratio)] = process_slice_dataframe(
                 load_dataset_as_pd_df(slice_file), n_samples
+                )
+            
+            if n_samples == 200:
+                slice_all_in_file = choose_reduced_feature_file_slice_all_in(n_samples, ratio, slice_id=0)
+                datasets[("slices_all_in", n_samples, ratio)] = process_slice_dataframe(
+                load_dataset_as_pd_df(slice_all_in_file), n_samples
                 )
 
 
@@ -921,6 +959,12 @@ def violin_plots_of_differences_global_2_heatmap(
     df_differences_slices_gen_025: pd.DataFrame,
     df_differences_slices_0_01: pd.DataFrame,
     df_differences_slices_gen_01: pd.DataFrame,
+    df_differences_slices_0_all_in_0_05: pd.DataFrame,
+    df_differences_slices_gen_all_in_0_05: pd.DataFrame,
+    df_differences_slices_0_all_in_0_025: pd.DataFrame,
+    df_differences_slices_gen_all_in_0_025: pd.DataFrame,
+    df_differences_slices_0_all_in_0_01: pd.DataFrame,
+    df_differences_slices_gen_all_in_0_01: pd.DataFrame,
     feature_name_list,
     function_id_list,
     instance_id_list=INSTANCE_IDS,
@@ -952,27 +996,30 @@ def violin_plots_of_differences_global_2_heatmap(
         "Sliced gen – 0.25",
         "Sliced 0 – 0.1",
         "Sliced gen – 0.1",
+        "Sliced 0 all in – 0.5",
+        "Sliced gen all in – 0.5",
+        "Sliced 0 all in – 0.25",
+        "Sliced gen all in – 0.25",
+        "Sliced 0 all in – 0.1",
+        "Sliced gen all in – 0.1",
     ]
+
+    # 16 unique markers
+    markers = [
+        "o", "s", "D", "^", "v", "<", ">", "P",
+        "X", "*", "h", "H", "8", "p", "d", "|"
+    ]
+
+    # 16 distinct colors
+    dataset_colors = plt.get_cmap("tab20").colors[:len(dataset_order)]
 
     dataset_to_marker = {
-        "Full (200 vs 2000)": "o",
-        "Reduced 0.5": "s",
-        "Reduced 0.25": "D",
-        "Reduced 0.1": "P",
-        "Sliced 0 – 0.5": "^",
-        "Sliced gen – 0.5": "v",
-        "Sliced 0 – 0.25": "<",
-        "Sliced gen – 0.25": ">",
-        "Sliced 0 – 0.1": "p",
-        "Sliced gen – 0.1": "*",
+        ds: markers[i] for i, ds in enumerate(dataset_order)
     }
 
-    dataset_colors = [
-        "blue", "orange", "green", "gray", "red",  
-        "purple", "brown", "pink", "cyan", "magenta"
-    ]
-
-    dataset_to_code = {d: i for i, d in enumerate(dataset_order)}
+    dataset_to_code = {
+        ds: i for i, ds in enumerate(dataset_order)
+    }
 
     # ------------------------------------------------------------------
     # Assemble long dataframe
@@ -990,6 +1037,12 @@ def violin_plots_of_differences_global_2_heatmap(
             prepare(df_differences_slices_gen_025, f, dataset_order[7]),
             prepare(df_differences_slices_0_01, f, dataset_order[8]),
             prepare(df_differences_slices_gen_01, f, dataset_order[9]),
+            prepare(df_differences_slices_0_all_in_0_05, f, dataset_order[10]),
+            prepare(df_differences_slices_gen_all_in_0_05, f, dataset_order[11]),
+            prepare(df_differences_slices_0_all_in_0_025, f, dataset_order[12]),
+            prepare(df_differences_slices_gen_all_in_0_025, f, dataset_order[13]),
+            prepare(df_differences_slices_0_all_in_0_01, f, dataset_order[14]),
+            prepare(df_differences_slices_gen_all_in_0_01, f, dataset_order[15]),
         ])
 
     df = pd.concat(dfs, ignore_index=True)
@@ -1258,6 +1311,48 @@ def main() -> None:
         agg="median"
     )
 
+    df_differences_slices_all_in_0_05 = compute_differences_in_slices_general(
+        datasets[("full", 2000, None)],
+        datasets[("slices_all_in", 200, 0.5)],
+        all_feature_names,
+        agg="median"
+    )
+
+    df_differences_slices_gen_all_in_0_05 = compute_differences_in_slices_general(
+        datasets[("full", 2000, None)],
+        datasets[("slices_all_in", 200, 0.5)],
+        all_feature_names,
+        agg="median"
+    )
+
+    df_differences_slices_all_in_0_025 = compute_differences_in_slices_general(
+        datasets[("full", 2000, None)],
+        datasets[("slices_all_in", 200, 0.25)],
+        all_feature_names,
+        agg="median"
+    )
+
+    df_differences_slices_gen_all_in_0_025 = compute_differences_in_slices_general(
+        datasets[("full", 2000, None)],
+        datasets[("slices_all_in", 200, 0.25)],
+        all_feature_names,
+        agg="median"
+    )
+
+    df_differences_slices_all_in_0_01 = compute_differences_in_slices_general(
+        datasets[("full", 2000, None)],
+        datasets[("slices_all_in", 200, 0.1)],
+        all_feature_names,
+        agg="median"
+    )
+
+    df_differences_slices_gen_all_in_0_01 = compute_differences_in_slices_general(
+        datasets[("full", 2000, None)],
+        datasets[("slices_all_in", 200, 0.1)],
+        all_feature_names,
+        agg="median"
+    )
+
 
     # Run the function as a test
     fig, ax = violin_plots_of_differences_global_2_heatmap(
@@ -1271,6 +1366,12 @@ def main() -> None:
         df_differences_slices_gen_025,
         df_differences_slices_0_01,
         df_differences_slices_gen_01,
+        df_differences_slices_all_in_0_05,
+        df_differences_slices_gen_all_in_0_05,
+        df_differences_slices_all_in_0_025,
+        df_differences_slices_gen_all_in_0_025,
+        df_differences_slices_all_in_0_01,
+        df_differences_slices_gen_all_in_0_01,
         feature_name_list=all_feature_names,
         function_id_list=FUNCTION_IDS,
         instance_id_list=INSTANCE_IDS,
