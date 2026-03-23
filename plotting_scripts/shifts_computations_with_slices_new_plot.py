@@ -19,6 +19,12 @@ matplotlib.rcParams['ps.fonttype'] = 42
 # Import pyplot
 import matplotlib.pyplot as plt
 
+plt.rcParams.update({
+    "pgf.texsystem": "pdflatex",
+    "text.usetex": True,
+    "pgf.rcfonts": False,
+})
+
 
 from matplotlib.colors import ListedColormap, BoundaryNorm
 from matplotlib.patches import Patch
@@ -40,24 +46,52 @@ DATASET_200_CONSIDERED_SEEDS = [*range(1001,1041)] # Seeds to consider for DATAS
 EPSILON = 1e-9 # To avoid log(0) or ./0 issues
 
 ROOT_DIRECTORY = Path(__file__).resolve().parent
-SAVE_FIGURE_DIRECTORY = ROOT_DIRECTORY.joinpath("figures_heatmaps_slices_ranked")
+SAVE_FIGURE_DIRECTORY = ROOT_DIRECTORY.joinpath("figures_heatmaps_slices_ranked_final")
 
 DATA_SIZES = [200, 2000]
 REDUCTION_RATIOS = [0.5, 0.25, 0.1]
 
 
-EXCLUDED_COLUMNS = {
-"embedding_seed",
-"round",
-"reduction_ratio",
-"instance_idx",
-"function_idx",
-"n_samples",
-"seed_lhs",
-"dimension",
-"group_id",
-"slice_id",
-}
+MODE=2 # 1 to include PCA features, 2 to exclude them
+
+
+if MODE == 1:
+    EXCLUDED_COLUMNS = {
+    "embedding_seed",
+    "round",
+    "reduction_ratio",
+    "instance_idx",
+    "function_idx",
+    "n_samples",
+    "seed_lhs",
+    "dimension",
+    "group_id",
+    "slice_id",
+    }
+elif MODE == 2:
+    EXCLUDED_COLUMNS = {
+    "embedding_seed",
+    "round",
+    "reduction_ratio",
+    "instance_idx",
+    "function_idx",
+    "n_samples",
+    "seed_lhs",
+    "dimension",
+    "group_id",
+    "slice_id",
+    # PCA features
+    "pca.expl_var.cor_init",
+    "pca.expl_var.cor_x", 
+    "pca.expl_var.cov_init", 
+    "pca.expl_var.cov_x", 
+    "pca.expl_var_PC1.cor_init", 
+    "pca.expl_var_PC1.cor_x",
+    "pca.expl_var_PC1.cov_init",
+    "pca.expl_var_PC1.cov_x",
+    }
+
+    P_ADJUST = "none"
 
 
 #/% First import the datasets (just keep in mind to make the labelling consistent)
@@ -375,6 +409,49 @@ def load_all_datasets():
 # -----------------------------------------------------------------------------
 # Problem Differences
 # -----------------------------------------------------------------------------
+
+def combine_differences_results(
+        list_of_dfs: List[pd.DataFrame],
+        dataset_names: List[str]) -> pd.DataFrame:
+    """
+    Combine multiple difference result dataframes into a single LONG dataframe
+    with columns:
+        function_idx, instance_idx, method, feature, ratio
+    """
+
+    if len(list_of_dfs) != len(dataset_names):
+        raise ValueError("Length of list_of_dfs and dataset_names must match")
+
+    # ---------------------------------------------------------
+    # Concatenate with method column (no explicit loop needed)
+    # ---------------------------------------------------------
+    df = pd.concat(
+        (d.assign(method=name) for d, name in zip(list_of_dfs, dataset_names)),
+        ignore_index=True
+    )
+
+    # ---------------------------------------------------------
+    # Identify ratio columns (fast vectorized)
+    # ---------------------------------------------------------
+    ratio_cols = df.columns[df.columns.str.startswith("ratio_")]
+
+    # ---------------------------------------------------------
+    # Melt → features become rows
+    # ---------------------------------------------------------
+    df_long = df.melt(
+        id_vars=["function_idx", "instance_idx", "method"],
+        value_vars=ratio_cols,
+        var_name="feature",
+        value_name="ratio",
+    )
+
+    # ---------------------------------------------------------
+    # Clean feature names (vectorized, once)
+    # ---------------------------------------------------------
+    df_long["feature"] = df_long["feature"].str.removeprefix("ratio_")
+
+    return df_long
+
 
 
 def compute_differences_full(
@@ -949,188 +1026,106 @@ def violin_plots_of_differences_global_2(
 
 
 def violin_plots_of_differences_global_2_heatmap(
-    df_differences_full: pd.DataFrame,
-    df_differences_reduced_05: pd.DataFrame,
-    df_differences_reduced_025: pd.DataFrame,
-    df_differences_reduced_01: pd.DataFrame,
-    df_differences_slices_0_05: pd.DataFrame,
-    df_differences_slices_gen_05: pd.DataFrame,
-    df_differences_slices_0_025: pd.DataFrame,
-    df_differences_slices_gen_025: pd.DataFrame,
-    df_differences_slices_0_01: pd.DataFrame,
-    df_differences_slices_gen_01: pd.DataFrame,
-    df_differences_slices_0_all_in_0_05: pd.DataFrame,
-    df_differences_slices_gen_all_in_0_05: pd.DataFrame,
-    df_differences_slices_0_all_in_0_025: pd.DataFrame,
-    df_differences_slices_gen_all_in_0_025: pd.DataFrame,
-    df_differences_slices_0_all_in_0_01: pd.DataFrame,
-    df_differences_slices_gen_all_in_0_01: pd.DataFrame,
-    feature_name_list,
-    function_id_list,
-    instance_id_list=INSTANCE_IDS,
-    agg="median",
-):
+    combined_df: pd.DataFrame,
+    function_id_list: List[int],
+    feature_name_list: List[str],
+    agg: str = "median"
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Heatmap identical in logic to heatmap_wasserstein_rankings_2,
+    but for ratio-based differences.
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-    def prepare(df, feature, label):
-        out = df.loc[
-            df["function_idx"].isin(function_id_list)
-            & df["instance_idx"].isin(instance_id_list),
-            ["instance_idx", "function_idx", f"ratio_{feature}"],
-        ].copy()
-        out["dataset"] = label
-        out["feature"] = feature
-        out.rename(columns={f"ratio_{feature}": "ratio"}, inplace=True)
-        return out
+    Expected columns in combined_df:
+        - function_idx
+        - feature
+        - dataset
+        - ratio
+    """
 
-    dataset_order = [
-        "Full (200 vs 2000)",
-        "Reduced 0.5",
-        "Reduced 0.25",
-        "Reduced 0.1",
-        "Sliced 0 – 0.5",
-        "Sliced gen – 0.5",
-        "Sliced 0 – 0.25",
-        "Sliced gen – 0.25",
-        "Sliced 0 – 0.1",
-        "Sliced gen – 0.1",
-        "Sliced 0 all in – 0.5",
-        "Sliced gen all in – 0.5",
-        "Sliced 0 all in – 0.25",
-        "Sliced gen all in – 0.25",
-        "Sliced 0 all in – 0.1",
-        "Sliced gen all in – 0.1",
-    ]
+    # ---------------------------------------------
+    # Align naming with wasserstein version
+    # ---------------------------------------------
+    df = combined_df.rename(columns={
+        "function_idx": "function_id",
+        "dataset": "method",
+        "feature": "feature_name",
+        "ratio": "value"
+    })
 
-    # 16 unique markers
+    dataset_order = df["method"].unique().tolist()
+
     markers = [
         "o", "s", "D", "^", "v", "<", ">", "P",
         "X", "*", "h", "H", "8", "p", "d", "|"
     ]
 
-    # 16 distinct colors
-    dataset_colors = plt.get_cmap("tab20").colors[:len(dataset_order)]
+    dataset_colors = plt.get_cmap("tab10").colors[:len(dataset_order)]
 
-    dataset_to_marker = {
-        ds: markers[i] for i, ds in enumerate(dataset_order)
-    }
+    dataset_to_marker = {ds: markers[i] for i, ds in enumerate(dataset_order)}
+    dataset_to_code = {ds: i for i, ds in enumerate(dataset_order)}
 
-    dataset_to_code = {
-        ds: i for i, ds in enumerate(dataset_order)
-    }
+    # ---------------------------------------------
+    # Filter
+    # ---------------------------------------------
+    df = df[
+        df["feature_name"].isin(feature_name_list)
+        & df["function_id"].isin(function_id_list)
+    ]
 
-    # ------------------------------------------------------------------
-    # Assemble long dataframe
-    # ------------------------------------------------------------------
-    dfs = []
-    for f in feature_name_list:
-        dfs.extend([
-            prepare(df_differences_full, f, dataset_order[0]),
-            prepare(df_differences_reduced_05, f, dataset_order[1]),
-            prepare(df_differences_reduced_025, f, dataset_order[2]),
-            prepare(df_differences_reduced_01, f, dataset_order[3]),
-            prepare(df_differences_slices_0_05, f, dataset_order[4]),
-            prepare(df_differences_slices_gen_05, f, dataset_order[5]),
-            prepare(df_differences_slices_0_025, f, dataset_order[6]),
-            prepare(df_differences_slices_gen_025, f, dataset_order[7]),
-            prepare(df_differences_slices_0_01, f, dataset_order[8]),
-            prepare(df_differences_slices_gen_01, f, dataset_order[9]),
-            prepare(df_differences_slices_0_all_in_0_05, f, dataset_order[10]),
-            prepare(df_differences_slices_gen_all_in_0_05, f, dataset_order[11]),
-            prepare(df_differences_slices_0_all_in_0_025, f, dataset_order[12]),
-            prepare(df_differences_slices_gen_all_in_0_025, f, dataset_order[13]),
-            prepare(df_differences_slices_0_all_in_0_01, f, dataset_order[14]),
-            prepare(df_differences_slices_gen_all_in_0_01, f, dataset_order[15]),
-        ])
-
-    df = pd.concat(dfs, ignore_index=True)
-
-    # ------------------------------------------------------------------
-    # Aggregate + distances
-    # ------------------------------------------------------------------
+    # ---------------------------------------------
+    # Aggregate
+    # IMPORTANT: use abs() if you want "closest to 0"
+    # ---------------------------------------------
     df_agg = (
-        df.groupby(["feature", "function_idx", "dataset"])
+        df.loc[:, ["function_id", "feature_name", "method", "value"]]
+        .assign(metric=lambda d: d["value"].abs())
+        .groupby(["function_id", "feature_name", "method"])["metric"]
         .agg(agg)
         .reset_index()
     )
-    df_agg["abs_ratio"] = df_agg["ratio"].abs()
 
-    # ------------------------------------------------------------------
-    # Winner + second-best per (function, feature)
-    # ------------------------------------------------------------------
-    top2 = (
-        df_agg
-        .sort_values(["function_idx", "feature", "abs_ratio"])
-        .groupby(["function_idx", "feature"])
-        .head(2)
-        .assign(rank=lambda d: d.groupby(["function_idx", "feature"]).cumcount() + 1)
-    )
-
-    df_winner = (
-        top2[top2["rank"] == 1]
-        .rename(columns={"dataset": "winner"})
-        [["function_idx", "feature", "winner"]]
-    )
-
-    df_second = (
-        top2[top2["rank"] == 2]
-        .rename(columns={"dataset": "second"})
-        [["function_idx", "feature", "second"]]
-    )
-
-    # ------------------------------------------------------------------
-    # Importance ranking (per feature)
-    # ------------------------------------------------------------------
-    df_score = (
-        df_agg.groupby(["function_idx", "feature"])["ratio"]
-        .apply(lambda x: np.median(np.abs(x)))
-        .rename("score")
-        .reset_index()
-    )
-
-    df_score["rank"] = (
-        df_score.groupby("feature")["score"]
-        .rank(method="dense", ascending=False)
-    )
-
+    # ---------------------------------------------
+    # Ranking (LOWER is better)
+    # ---------------------------------------------
     df_ranked = (
-        df_score
-        .merge(df_winner, on=["function_idx", "feature"])
-        .merge(df_second, on=["function_idx", "feature"], how="left")
+        df_agg
+        .sort_values(["function_id", "feature_name", "metric"])
+        .groupby(["function_id", "feature_name"], group_keys=False)
+        .apply(lambda x: x.assign(rank=np.arange(1, len(x) + 1)))
     )
 
-    df_ranked["winner_code"] = df_ranked["winner"].map(dataset_to_code)
-    df_ranked["second_marker"] = df_ranked["second"].map(dataset_to_marker)
+    df_winner = df_ranked[df_ranked["rank"] == 1][
+        ["function_id", "feature_name", "method"]
+    ].rename(columns={"method": "winner"})
 
-    # ------------------------------------------------------------------
-    # Heatmap matrix + ordering
-    # ------------------------------------------------------------------
-    heatmap = df_ranked.pivot(
-        index="function_idx",
-        columns="feature",
+    df_second = df_ranked[df_ranked["rank"] == 2][
+        ["function_id", "feature_name", "method"]
+    ].rename(columns={"method": "second"})
+
+    df_plot = df_winner.merge(
+        df_second,
+        on=["function_id", "feature_name"],
+        how="left",
+    )
+
+    df_plot["winner_code"] = df_plot["winner"].map(dataset_to_code)
+    df_plot["second_marker"] = df_plot["second"].map(dataset_to_marker)
+
+    # ---------------------------------------------
+    # Pivot
+    # ---------------------------------------------
+    heatmap = df_plot.pivot(
+        index="function_id",
+        columns="feature_name",
         values="winner_code",
     )
 
-    function_order = (
-        df_ranked.groupby("function_idx")["rank"]
-        .mean()
-        .sort_values()
-        .index
-    )
-
-    heatmap = heatmap.loc[function_order]
-
+    heatmap = heatmap.reindex(index=function_id_list)
     heatmap = heatmap[feature_name_list]
 
-    heatmap = heatmap.reindex(index=function_id_list)
-
-
-
-    # ------------------------------------------------------------------
+    # ---------------------------------------------
     # Plot
-    # ------------------------------------------------------------------
+    # ---------------------------------------------
     cmap = ListedColormap(dataset_colors)
     norm = BoundaryNorm(
         np.arange(-0.5, len(dataset_colors) + 0.5, 1),
@@ -1150,23 +1145,19 @@ def violin_plots_of_differences_global_2_heatmap(
         ax=ax,
     )
 
-    # ------------------------------------------------------------------
-    # Overlay runner-up symbols
-    # ------------------------------------------------------------------
+    # ---------------------------------------------
+    # Overlay second-best markers
+    # ---------------------------------------------
     feature_to_x = {f: i for i, f in enumerate(heatmap.columns)}
     function_to_y = {f: i for i, f in enumerate(heatmap.index)}
 
-    for _, r in df_ranked.iterrows():
+    for _, r in df_plot.iterrows():
         if pd.isna(r["second_marker"]):
-            continue
-        if r["feature"] not in feature_to_x:
-            continue
-        if r["function_idx"] not in function_to_y:
             continue
 
         ax.scatter(
-            feature_to_x[r["feature"]] + 0.5,
-            function_to_y[r["function_idx"]] + 0.5,
+            feature_to_x[r["feature_name"]] + 0.5,
+            function_to_y[r["function_id"]] + 0.5,
             marker=r["second_marker"],
             s=60,
             facecolors="none",
@@ -1178,15 +1169,15 @@ def violin_plots_of_differences_global_2_heatmap(
     ax.set_xlabel("Feature")
     ax.set_ylabel("Function")
 
-    # ------------------------------------------------------------------
+    # ---------------------------------------------
     # Legends
-    # ------------------------------------------------------------------
+    # ---------------------------------------------
     color_legend = ax.legend(
         handles=[
             Patch(color=dataset_colors[i], label=dataset_order[i])
             for i in range(len(dataset_order))
         ],
-        title="Dataset closest to 0",
+        title="Best (closest to 0)",
         bbox_to_anchor=(1.02, 1),
         loc="upper left",
     )
@@ -1205,7 +1196,7 @@ def violin_plots_of_differences_global_2_heatmap(
             )
             for ds, m in dataset_to_marker.items()
         ],
-        title="Second-closest dataset",
+        title="Second-best",
         bbox_to_anchor=(1.02, 0.1),
         loc="upper left",
     )
@@ -1242,31 +1233,31 @@ def main() -> None:
         agg="median"
     )
 
-    # Get the differences between full and reduced datasets
-    df_differences_reduced_05 = compute_differences_in_reduced(
-        datasets[("full", 2000, None)],
-        #datasets[("reduced", 200, 0.5)],
-        datasets[("oneshot", 200, 0.5)],
-        all_feature_names,
-        agg="median"
-    )
+    # # Get the differences between full and reduced datasets
+    # df_differences_reduced_05 = compute_differences_in_reduced(
+    #     datasets[("full", 2000, None)],
+    #     #datasets[("reduced", 200, 0.5)],
+    #     datasets[("oneshot", 200, 0.5)],
+    #     all_feature_names,
+    #     agg="median"
+    # )
 
-    # Get the differences between full and reduced datasets
-    df_differences_reduced_025 = compute_differences_in_reduced(
-        datasets[("full", 2000, None)],
-        #datasets[("reduced", 200, 0.5)],
-        datasets[("oneshot", 200, 0.25)],
-        all_feature_names,
-        agg="median"
-    )
+    # # Get the differences between full and reduced datasets
+    # df_differences_reduced_025 = compute_differences_in_reduced(
+    #     datasets[("full", 2000, None)],
+    #     #datasets[("reduced", 200, 0.5)],
+    #     datasets[("oneshot", 200, 0.25)],
+    #     all_feature_names,
+    #     agg="median"
+    # )
 
-    df_differences_reduced_01 = compute_differences_in_reduced(
-        datasets[("full", 2000, None)],
-        #datasets[("reduced", 200, 0.5)],
-        datasets[("oneshot", 200, 0.1)],
-        all_feature_names,
-        agg="median"
-    )
+    # df_differences_reduced_01 = compute_differences_in_reduced(
+    #     datasets[("full", 2000, None)],
+    #     #datasets[("reduced", 200, 0.5)],
+    #     datasets[("oneshot", 200, 0.1)],
+    #     all_feature_names,
+    #     agg="median"
+    # )
 
     df_differences_slices_0_05 = compute_differences_in_slices_0(
         datasets[("full", 2000, None)],
@@ -1275,12 +1266,12 @@ def main() -> None:
         agg="median"
     )
 
-    df_differences_slices_gen_05 = compute_differences_in_slices_general(
-        datasets[("full", 2000, None)],
-        datasets[("slices", 200, 0.5)],
-        all_feature_names,
-        agg="median"
-    )
+    # df_differences_slices_gen_05 = compute_differences_in_slices_general(
+    #     datasets[("full", 2000, None)],
+    #     datasets[("slices", 200, 0.5)],
+    #     all_feature_names,
+    #     agg="median"
+    # )
 
     # Get the differences between full and slices datasets
     df_differences_slices_0_025 = compute_differences_in_slices_0(
@@ -1290,12 +1281,12 @@ def main() -> None:
         agg="median"
     )
 
-    df_differences_slices_gen_025 = compute_differences_in_slices_general(
-        datasets[("full", 2000, None)],
-        datasets[("slices", 200, 0.25)],
-        all_feature_names,
-        agg="median"
-    )
+    # df_differences_slices_gen_025 = compute_differences_in_slices_general(
+    #     datasets[("full", 2000, None)],
+    #     datasets[("slices", 200, 0.25)],
+    #     all_feature_names,
+    #     agg="median"
+    # )
 
     df_differences_slices_0_01 = compute_differences_in_slices_0(
         datasets[("full", 2000, None)],
@@ -1304,12 +1295,12 @@ def main() -> None:
         agg="median"
     )
 
-    df_differences_slices_gen_01 = compute_differences_in_slices_general(
-        datasets[("full", 2000, None)],
-        datasets[("slices", 200, 0.1)],
-        all_feature_names,
-        agg="median"
-    )
+    # df_differences_slices_gen_01 = compute_differences_in_slices_general(
+    #     datasets[("full", 2000, None)],
+    #     datasets[("slices", 200, 0.1)],
+    #     all_feature_names,
+    #     agg="median"
+    # )
 
     df_differences_slices_all_in_0_05 = compute_differences_in_slices_general(
         datasets[("full", 2000, None)],
@@ -1353,28 +1344,45 @@ def main() -> None:
         agg="median"
     )
 
-
-    # Run the function as a test
-    fig, ax = violin_plots_of_differences_global_2_heatmap(
-        df_differences_full,
-        df_differences_reduced_05,
-        df_differences_reduced_025,
-        df_differences_reduced_01,
+    df_differences_list = combine_differences_results(
+        [df_differences_full,
+        # df_differences_reduced_05,
+        # df_differences_reduced_025,
         df_differences_slices_0_05,
-        df_differences_slices_gen_05,
+        # df_differences_slices_gen_05,
         df_differences_slices_0_025,
-        df_differences_slices_gen_025,
+        # df_differences_slices_gen_025,
         df_differences_slices_0_01,
-        df_differences_slices_gen_01,
+        # df_differences_slices_gen_01,
         df_differences_slices_all_in_0_05,
         df_differences_slices_gen_all_in_0_05,
         df_differences_slices_all_in_0_025,
         df_differences_slices_gen_all_in_0_025,
         df_differences_slices_all_in_0_01,
-        df_differences_slices_gen_all_in_0_01,
+        df_differences_slices_gen_all_in_0_01],
+        ["Full/ELA$_{\\mathrm{A}}$",
+        "Sliced/ELA$_{\\mathrm{A}},r=0.5$",
+        "Sliced/ELA$_{\\mathrm{A}},r=0.25$",
+        "Sliced/ELA$_{\\mathrm{A}},r=0.1$",
+        "All\_in/ELA$_{\\mathrm{A}},r=0.5$",
+        "All\_in/ELA$_{\\mathrm{A}},r=0.25$",
+        "All\_in/ELA$_{\\mathrm{A}},r=0.1$",
+        "All\_in/ELA$_{\\mathrm{R}},r=0.5$",
+        "All\_in/ELA$_{\\mathrm{R}},r=0.25$",
+        "All\_in/ELA$_{\\mathrm{R}},r=0.1$"]
+    )
+    
+    # Delete the individual dataframes to save memory
+    del df_differences_full, df_differences_slices_0_05, df_differences_slices_0_025, df_differences_slices_0_01
+    del df_differences_slices_all_in_0_05, df_differences_slices_gen_all_in_0_05, df_differences_slices_all_in_0_025
+    del df_differences_slices_gen_all_in_0_025, df_differences_slices_all_in_0_01, df_differences_slices_gen_all_in_0_01
+
+
+    # Run the function as a test
+    fig, ax = violin_plots_of_differences_global_2_heatmap(
+        combined_df=df_differences_list,
         feature_name_list=all_feature_names,
         function_id_list=FUNCTION_IDS,
-        instance_id_list=INSTANCE_IDS,
         agg="median",
     )
 

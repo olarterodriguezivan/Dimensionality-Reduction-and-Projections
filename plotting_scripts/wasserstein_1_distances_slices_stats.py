@@ -23,8 +23,16 @@ from scipy.stats import wasserstein_distance, wilcoxon
 matplotlib.rcParams['pdf.fonttype'] = 42
 matplotlib.rcParams['ps.fonttype'] = 42
 
+
+
 # Import pyplot
 import matplotlib.pyplot as plt
+
+plt.rcParams.update({
+    "pgf.texsystem": "pdflatex",
+    "text.usetex": True,
+    "pgf.rcfonts": False,
+})
 
 ## =============================
 ## CONSTANT CONFIGURATION
@@ -1296,7 +1304,7 @@ def _aggregate_instances_per_feature(
 def best_method_per_function_rank_based(
     df: pd.DataFrame,
     agg_instances: str = "median",
-    agg_ranks: str = "median",
+    agg_ranks: str = "mean",
 ) -> pd.DataFrame:
     r"""
     Determine the best method per function using rank aggregation across features.
@@ -1335,7 +1343,7 @@ def best_method_per_function_rank_based(
     # smaller wasserstein_distance = better rank
     df_feat["feature_rank"] = (
         df_feat.groupby(["function_id", "feature_name"])["wasserstein_distance"]
-        .rank(method="dense", ascending=True)
+        .rank(method="average", ascending=True)
     )
 
     # Step 3: aggregate ranks across features
@@ -1348,7 +1356,7 @@ def best_method_per_function_rank_based(
     # Step 4: final ranking per function
     df_func["final_rank"] = (
         df_func.groupby("function_id")["aggregated_feature_rank"]
-        .rank(method="dense", ascending=True)
+        .rank(method="average", ascending=True)
         .astype(int)
     )
 
@@ -1392,7 +1400,7 @@ def best_method_per_feature_rank_based(
     # Step 2
     df_feat["feature_rank"] = (
         df_feat.groupby(["function_id", "feature_name"])["wasserstein_distance"]
-        .rank(method="dense", ascending=True)
+        .rank(method="average", ascending=True)
     )
 
     # Step 3
@@ -1405,7 +1413,7 @@ def best_method_per_feature_rank_based(
     # Step 4
     df_feature["final_rank"] = (
         df_feature.groupby("feature_name")["aggregated_function_rank"]
-        .rank(method="dense", ascending=True)
+        .rank(method="average", ascending=True)
         .astype(int)
     )
 
@@ -1806,19 +1814,19 @@ def main() -> None:
         df_wasserstein_slices_all_in_0_01_gen,
     ],
     [
-        "Full",
-        "Slice0_05",
-        "Slice0_025",
-        "Slice0_01",
-        "SliceAll0_05",
-        "SliceAll0_025",
-        "SliceAll0_01",
+        "Full/ELA$_{\\mathrm{A}}$",
+        "Sliced/ELA$_{\\mathrm{A}},r=0.5$",
+        "Sliced/ELA$_{\\mathrm{A}},r=0.25$",
+        "Sliced/ELA$_{\\mathrm{A}},r=0.1$",
+        "All\_in/ELA$_{\\mathrm{A}},r=0.5$",
+        "All\_in/ELA$_{\\mathrm{A}},r=0.25$",
+        "All\_in/ELA$_{\\mathrm{A}},r=0.1$",
         #"SliceGen_05",
         #"SliceGen_025",
         #"SliceGen_01",
-        "SliceGenAll_05",
-        "SliceGenAll_025",
-        "SliceGenAll_01",
+        "All\_in/ELA$_{\\mathrm{R}},r=0.5$",
+        "All\_in/ELA$_{\\mathrm{R}},r=0.25$",
+        "All\_in/ELA$_{\\mathrm{R}},r=0.1$",
     ]
 )
     
@@ -1826,7 +1834,7 @@ def main() -> None:
     df_best_per_function = best_method_per_function_rank_based(
         df_all_methods,
         agg_instances="median",
-        agg_ranks="median",
+        agg_ranks="mean",
     )
 
     print("\nBest method per function overall:")
@@ -1877,7 +1885,7 @@ def main() -> None:
         df_all_methods,
         FUNCTION_IDS,
         all_feature_names,
-        agg="median"
+        agg="median",
     )
 
     fig.savefig(SAVE_FIGURE_DIRECTORY / f"wasserstein_ranking_heatmap_mode_{MODE}.pdf", dpi=300)

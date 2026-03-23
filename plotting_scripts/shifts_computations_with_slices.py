@@ -19,6 +19,12 @@ matplotlib.rcParams['ps.fonttype'] = 42
 # Import pyplot
 import matplotlib.pyplot as plt
 
+plt.rcParams.update({
+    "pgf.texsystem": "pdflatex",
+    "text.usetex": True,
+    "pgf.rcfonts": False,
+})
+
 ## =============================
 ## CONSTANT CONFIGURATION
 ## =============================
@@ -40,19 +46,46 @@ DATA_SIZES = [200, 2000]
 REDUCTION_RATIOS = [0.5, 0.25, 0.1]
 
 
-EXCLUDED_COLUMNS = {
-"embedding_seed",
-"round",
-"reduction_ratio",
-"instance_idx",
-"function_idx",
-"n_samples",
-"seed_lhs",
-"dimension",
-"group_id",
-"slice_id",
-}
+MODE=2 # 1 to include PCA features, 2 to exclude them
 
+
+if MODE == 1:
+    EXCLUDED_COLUMNS = {
+    "embedding_seed",
+    "round",
+    "reduction_ratio",
+    "instance_idx",
+    "function_idx",
+    "n_samples",
+    "seed_lhs",
+    "dimension",
+    "group_id",
+    "slice_id",
+    }
+elif MODE == 2:
+    EXCLUDED_COLUMNS = {
+    "embedding_seed",
+    "round",
+    "reduction_ratio",
+    "instance_idx",
+    "function_idx",
+    "n_samples",
+    "seed_lhs",
+    "dimension",
+    "group_id",
+    "slice_id",
+    # PCA features
+    "pca.expl_var.cor_init",
+    "pca.expl_var.cor_x", 
+    "pca.expl_var.cov_init", 
+    "pca.expl_var.cov_x", 
+    "pca.expl_var_PC1.cor_init", 
+    "pca.expl_var_PC1.cor_x",
+    "pca.expl_var_PC1.cov_init",
+    "pca.expl_var_PC1.cov_x",
+    }
+
+    P_ADJUST = "none"
 
 #/% First import the datasets (just keep in mind to make the labelling consistent)
 # ELA Features on Full-Dataset without Projections
@@ -321,6 +354,49 @@ def process_slice_dataframe(df:pd.DataFrame, dataset_size:int) -> pd.DataFrame:
 # -----------------------------------------------------------------------------
 # Dataset loading
 # -----------------------------------------------------------------------------
+
+def combine_differences_results(
+        list_of_dfs: List[pd.DataFrame],
+        dataset_names: List[str]) -> pd.DataFrame:
+    """
+    Combine multiple difference result dataframes into a single LONG dataframe
+    with columns:
+        function_idx, instance_idx, method, feature, ratio
+    """
+
+    if len(list_of_dfs) != len(dataset_names):
+        raise ValueError("Length of list_of_dfs and dataset_names must match")
+
+    # ---------------------------------------------------------
+    # Concatenate with method column (no explicit loop needed)
+    # ---------------------------------------------------------
+    df = pd.concat(
+        (d.assign(method=name) for d, name in zip(list_of_dfs, dataset_names)),
+        ignore_index=True
+    )
+
+    # ---------------------------------------------------------
+    # Identify ratio columns (fast vectorized)
+    # ---------------------------------------------------------
+    ratio_cols = df.columns[df.columns.str.startswith("ratio_")]
+
+    # ---------------------------------------------------------
+    # Melt → features become rows
+    # ---------------------------------------------------------
+    df_long = df.melt(
+        id_vars=["function_idx", "instance_idx", "method"],
+        value_vars=ratio_cols,
+        var_name="feature",
+        value_name="ratio",
+    )
+
+    # ---------------------------------------------------------
+    # Clean feature names (vectorized, once)
+    # ---------------------------------------------------------
+    df_long["feature"] = df_long["feature"].str.removeprefix("ratio_")
+
+    return df_long
+
 
 
 def load_all_datasets():
@@ -875,68 +951,40 @@ def violin_plots_of_differences_global(
 
 
 def violin_plots_of_differences_global_2(
-    df_differences_full: pd.DataFrame,
-    df_differences_reduced_05: pd.DataFrame,
-    df_differences_reduced_025: pd.DataFrame,
-    df_differences_reduced_01: pd.DataFrame,
-    df_differences_slices_0_05: pd.DataFrame,
-    df_differences_slices_gen_05: pd.DataFrame,
-    df_differences_slices_0_025: pd.DataFrame,
-    df_differences_slices_gen_025: pd.DataFrame,
-    df_differences_slices_0_01: pd.DataFrame,
-    df_differences_slices_gen_01: pd.DataFrame,
-    df_differences_slices_all_in_0_05: pd.DataFrame,
-    df_differences_slices_all_in_gen_0_05: pd.DataFrame,
-    df_differences_slices_all_in_0_025: pd.DataFrame,
-    df_differences_slices_all_in_gen_0_025: pd.DataFrame,
-    df_differences_slices_all_in_0_01: pd.DataFrame,
-    df_differences_slices_all_in_gen_0_01: pd.DataFrame,
-    feature_name: str,
-    function_id: int,
-    instance_id_list: List[int] = INSTANCE_IDS,
-) -> Tuple[plt.Figure, plt.Axes]:
-    """
+        df_list: pd.DataFrame,
+        feature_name: str,
+        function_id: int,
+        instance_id_list: List[int] = INSTANCE_IDS,
+    ) -> Tuple[plt.Figure, plt.Axes]:
+
+    r"""
     Create violin plots of relative differences for a single feature
     and a single function across different dataset variants.
+
+    Args
+    --------------
+    - df_list (pd.DataFrame): A DataFrame containing the differences for the dataset variant.
+    - feature_name (str): The name of the feature to plot.
+    - function_id (int): The function ID to filter the datasets.
+    - instance_id_list (List[int]): A list of instance IDs to filter the datasets.
+
+    Returns
+    --------------
+    - Tuple[plt.Figure, plt.Axes]: The figure and axes objects of the created plot.
     """
 
-    ratio_col = f"ratio_{feature_name}"
-
     # --- Helper ---
-    def prepare(df: pd.DataFrame, label: str) -> pd.DataFrame:
+    def prepare(df: pd.DataFrame) -> pd.DataFrame:
         out = df.loc[
             (df["function_idx"] == function_id)
-            & (df["instance_idx"].isin(instance_id_list)),
-            ["instance_idx", ratio_col],
+            & (df["instance_idx"].isin(instance_id_list)) &
+            (df["feature"] == feature_name),
         ].copy()
 
-        out["dataset"] = label
-        out["feature"] = feature_name
-        out.rename(columns={ratio_col: "ratio"}, inplace=True)
         return out
-
+    
     # --- Prepare datasets ---
-    df_plot = pd.concat(
-        [
-            prepare(df_differences_full, "Full (200 vs 2000)"),
-            prepare(df_differences_reduced_05, "Reduced 0.5"),
-            prepare(df_differences_reduced_025, "Reduced 0.25"),
-            prepare(df_differences_reduced_01, "Reduced 0.1"),
-            prepare(df_differences_slices_0_05, "Sliced 0 – 0.5"),
-            prepare(df_differences_slices_gen_05, "Sliced gen – 0.5"),
-            prepare(df_differences_slices_0_025, "Sliced 0 – 0.25"),
-            prepare(df_differences_slices_gen_025, "Sliced gen – 0.25"),
-            prepare(df_differences_slices_0_01, "Sliced 0 – 0.1"),
-            prepare(df_differences_slices_gen_01, "Sliced gen – 0.1"),
-            prepare(df_differences_slices_all_in_0_05, "Sliced all in – 0.5"),
-            prepare(df_differences_slices_all_in_gen_0_05, "Sliced all in gen – 0.5"),
-            prepare(df_differences_slices_all_in_0_025, "Sliced all in – 0.25"),
-            prepare(df_differences_slices_all_in_gen_0_025, "Sliced all in gen – 0.25"),
-            prepare(df_differences_slices_all_in_0_01, "Sliced all in – 0.1"),
-            prepare(df_differences_slices_all_in_gen_0_01, "Sliced all in gen – 0.1"),
-        ],  
-        ignore_index=True,
-    )
+    df_plot = prepare(df_list)
 
     # --- Plot ---
     fig, ax = plt.subplots(figsize=(4, 6))
@@ -945,11 +993,11 @@ def violin_plots_of_differences_global_2(
         data=df_plot,
         x="feature",
         y="ratio",
-        hue="dataset",
+        hue="method",
         ax=ax,
-        cut=0,
     )
 
+    #ax.set_ylim(-2, 2)
     ax.set_title(f"Relative differences – function {function_id}")
     ax.set_ylabel("Relative difference")
     ax.set_xlabel("Feature")
@@ -958,6 +1006,90 @@ def violin_plots_of_differences_global_2(
     plt.tight_layout()
 
     return fig, ax
+# def violin_plots_of_differences_global_2(
+#     df_differences_full: pd.DataFrame,
+#     df_differences_reduced_05: pd.DataFrame,
+#     df_differences_reduced_025: pd.DataFrame,
+#     df_differences_reduced_01: pd.DataFrame,
+#     df_differences_slices_0_05: pd.DataFrame,
+#     df_differences_slices_gen_05: pd.DataFrame,
+#     df_differences_slices_0_025: pd.DataFrame,
+#     df_differences_slices_gen_025: pd.DataFrame,
+#     df_differences_slices_0_01: pd.DataFrame,
+#     df_differences_slices_gen_01: pd.DataFrame,
+#     df_differences_slices_all_in_0_05: pd.DataFrame,
+#     df_differences_slices_all_in_gen_0_05: pd.DataFrame,
+#     df_differences_slices_all_in_0_025: pd.DataFrame,
+#     df_differences_slices_all_in_gen_0_025: pd.DataFrame,
+#     df_differences_slices_all_in_0_01: pd.DataFrame,
+#     df_differences_slices_all_in_gen_0_01: pd.DataFrame,
+#     feature_name: str,
+#     function_id: int,
+#     instance_id_list: List[int] = INSTANCE_IDS,
+# ) -> Tuple[plt.Figure, plt.Axes]:
+#     """
+#     Create violin plots of relative differences for a single feature
+#     and a single function across different dataset variants.
+#     """
+
+#     ratio_col = f"ratio_{feature_name}"
+
+#     # --- Helper ---
+#     def prepare(df: pd.DataFrame, label: str) -> pd.DataFrame:
+#         out = df.loc[
+#             (df["function_idx"] == function_id)
+#             & (df["instance_idx"].isin(instance_id_list)),
+#             ["instance_idx", ratio_col],
+#         ].copy()
+
+#         out["dataset"] = label
+#         out["feature"] = feature_name
+#         out.rename(columns={ratio_col: "ratio"}, inplace=True)
+#         return out
+
+#     # --- Prepare datasets ---
+#     df_plot = pd.concat(
+#         [
+#             prepare(df_differences_full, "Full (200 vs 2000)"),
+#             prepare(df_differences_reduced_05, "Reduced 0.5"),
+#             prepare(df_differences_reduced_025, "Reduced 0.25"),
+#             prepare(df_differences_reduced_01, "Reduced 0.1"),
+#             prepare(df_differences_slices_0_05, "Sliced 0 – 0.5"),
+#             prepare(df_differences_slices_gen_05, "Sliced gen – 0.5"),
+#             prepare(df_differences_slices_0_025, "Sliced 0 – 0.25"),
+#             prepare(df_differences_slices_gen_025, "Sliced gen – 0.25"),
+#             prepare(df_differences_slices_0_01, "Sliced 0 – 0.1"),
+#             prepare(df_differences_slices_gen_01, "Sliced gen – 0.1"),
+#             prepare(df_differences_slices_all_in_0_05, "Sliced all in – 0.5"),
+#             prepare(df_differences_slices_all_in_gen_0_05, "Sliced all in gen – 0.5"),
+#             prepare(df_differences_slices_all_in_0_025, "Sliced all in – 0.25"),
+#             prepare(df_differences_slices_all_in_gen_0_025, "Sliced all in gen – 0.25"),
+#             prepare(df_differences_slices_all_in_0_01, "Sliced all in – 0.1"),
+#             prepare(df_differences_slices_all_in_gen_0_01, "Sliced all in gen – 0.1"),
+#         ],  
+#         ignore_index=True,
+#     )
+
+#     # --- Plot ---
+#     fig, ax = plt.subplots(figsize=(4, 6))
+
+#     sns.violinplot(
+#         data=df_plot,
+#         x="feature",
+#         y="ratio",
+#         hue="dataset",
+#         ax=ax,
+#         cut=0,
+#     )
+
+#     ax.set_title(f"Relative differences – function {function_id}")
+#     ax.set_ylabel("Relative difference")
+#     ax.set_xlabel("Feature")
+#     ax.grid(True, axis="y", linestyle="--", alpha=0.5)
+
+#     plt.tight_layout()
+
+#     return fig, ax
 
 
 
@@ -987,32 +1119,32 @@ def main() -> None:
         agg="median"
     )
 
-    # Get the differences between full and reduced datasets
-    df_differences_reduced_05 = compute_differences_in_reduced(
-        datasets[("full", 2000, None)],
-        #datasets[("reduced", 200, 0.5)],
-        datasets[("oneshot", 200, 0.5)],
-        all_feature_names,
-        agg="median"
-    )
+    # # Get the differences between full and reduced datasets
+    # df_differences_reduced_05 = compute_differences_in_reduced(
+    #     datasets[("full", 2000, None)],
+    #     #datasets[("reduced", 200, 0.5)],
+    #     datasets[("oneshot", 200, 0.5)],
+    #     all_feature_names,
+    #     agg="median"
+    # )
 
-    # Get the differences between full and reduced datasets
-    df_differences_reduced_025 = compute_differences_in_reduced(
-        datasets[("full", 2000, None)],
-        #datasets[("reduced", 200, 0.5)],
-        datasets[("oneshot", 200, 0.25)],
-        all_feature_names,
-        agg="median"
-    )
+    # # Get the differences between full and reduced datasets
+    # df_differences_reduced_025 = compute_differences_in_reduced(
+    #     datasets[("full", 2000, None)],
+    #     #datasets[("reduced", 200, 0.5)],
+    #     datasets[("oneshot", 200, 0.25)],
+    #     all_feature_names,
+    #     agg="median"
+    # )
 
-    # Get the differences between full and reduced datasets
-    df_differences_reduced_01 = compute_differences_in_reduced(
-        datasets[("full", 2000, None)],
-        #datasets[("reduced", 200, 0.5)],
-        datasets[("oneshot", 200, 0.1)],
-        all_feature_names,
-        agg="median"
-    )
+    # # Get the differences between full and reduced datasets
+    # df_differences_reduced_01 = compute_differences_in_reduced(
+    #     datasets[("full", 2000, None)],
+    #     #datasets[("reduced", 200, 0.5)],
+    #     datasets[("oneshot", 200, 0.1)],
+    #     all_feature_names,
+    #     agg="median"
+    # )
 
     df_differences_slices_0_05 = compute_differences_in_slices_0(
         datasets[("full", 2000, None)],
@@ -1021,12 +1153,12 @@ def main() -> None:
         agg="median"
     )
 
-    df_differences_slices_gen_05 = compute_differences_in_slices_general(
-        datasets[("full", 2000, None)],
-        datasets[("slices", 200, 0.5)],
-        all_feature_names,
-        agg="median"
-    )
+    # df_differences_slices_gen_05 = compute_differences_in_slices_general(
+    #     datasets[("full", 2000, None)],
+    #     datasets[("slices", 200, 0.5)],
+    #     all_feature_names,
+    #     agg="median"
+    # )
 
     # Get the differences between full and slices datasets
     df_differences_slices_0_025 = compute_differences_in_slices_0(
@@ -1036,12 +1168,12 @@ def main() -> None:
         agg="median"
     )
 
-    df_differences_slices_gen_025 = compute_differences_in_slices_general(
-        datasets[("full", 2000, None)],
-        datasets[("slices", 200, 0.25)],
-        all_feature_names,
-        agg="median"
-    )
+    # df_differences_slices_gen_025 = compute_differences_in_slices_general(
+    #     datasets[("full", 2000, None)],
+    #     datasets[("slices", 200, 0.25)],
+    #     all_feature_names,
+    #     agg="median"
+    # )
 
     # Get the differences between full and slices datasets
     df_differences_slices_0_01 = compute_differences_in_slices_0(
@@ -1051,12 +1183,12 @@ def main() -> None:
         agg="median"
     )
 
-    df_differences_slices_gen_01 = compute_differences_in_slices_general(
-        datasets[("full", 2000, None)],
-        datasets[("slices", 200, 0.1)],
-        all_feature_names,
-        agg="median"
-    )
+    # df_differences_slices_gen_01 = compute_differences_in_slices_general(
+    #     datasets[("full", 2000, None)],
+    #     datasets[("slices", 200, 0.1)],
+    #     all_feature_names,
+    #     agg="median"
+    # )
 
     df_differences_slices_all_in_0_05 = compute_differences_in_slices_0(
         datasets[("full", 2000, None)],
@@ -1100,6 +1232,40 @@ def main() -> None:
         agg="median"
     )
 
+    # Make a combined dataset for plotting
+    df_differences_list = combine_differences_results(
+        [df_differences_full,
+        # df_differences_reduced_05,
+        # df_differences_reduced_025,
+        df_differences_slices_0_05,
+        # df_differences_slices_gen_05,
+        df_differences_slices_0_025,
+        # df_differences_slices_gen_025,
+        df_differences_slices_0_01,
+        # df_differences_slices_gen_01,
+        df_differences_slices_all_in_0_05,
+        df_differences_slices_all_in_gen_0_05,
+        df_differences_slices_all_in_0_025,
+        df_differences_slices_all_in_gen_0_025,
+        df_differences_slices_all_in_0_01,
+        df_differences_slices_all_in_gen_0_01],
+        ["Full/ELA$_{\\mathrm{A}}$",
+        "Sliced/ELA$_{\\mathrm{A}},r=0.5$",
+        "Sliced/ELA$_{\\mathrm{A}},r=0.25$",
+        "Sliced/ELA$_{\\mathrm{A}},r=0.1$",
+        "All\_in/ELA$_{\\mathrm{A}},r=0.5$",
+        "All\_in/ELA$_{\\mathrm{A}},r=0.25$",
+        "All\_in/ELA$_{\\mathrm{A}},r=0.1$",
+        "All\_in/ELA$_{\\mathrm{R}},r=0.5$",
+        "All\_in/ELA$_{\\mathrm{R}},r=0.25$",
+        "All\_in/ELA$_{\\mathrm{R}},r=0.1$"]
+    )
+
+    # Delete the individual datasets to save memory
+    del df_differences_full, df_differences_slices_0_05, df_differences_slices_0_025
+    del df_differences_slices_0_01, df_differences_slices_all_in_0_05, df_differences_slices_all_in_gen_0_05
+    del df_differences_slices_all_in_0_025, df_differences_slices_all_in_gen_0_025, df_differences_slices_all_in_0_01, df_differences_slices_all_in_gen_0_01
+
 
 
     #fig, ax = box_plots_of_differences(
@@ -1117,22 +1283,7 @@ def main() -> None:
     for function_id in FUNCTION_IDS:
         for feature_name in all_feature_names:
             fig, ax = violin_plots_of_differences_global_2(
-                df_differences_full,
-                df_differences_reduced_05,
-                df_differences_reduced_025,
-                df_differences_reduced_01,
-                df_differences_slices_0_05,
-                df_differences_slices_gen_05,
-                df_differences_slices_0_025,
-                df_differences_slices_gen_025,
-                df_differences_slices_0_01,
-                df_differences_slices_gen_01,
-                df_differences_slices_all_in_0_05,
-                df_differences_slices_all_in_gen_0_05,
-                df_differences_slices_all_in_0_025,
-                df_differences_slices_all_in_gen_0_025,
-                df_differences_slices_all_in_0_01,
-                df_differences_slices_all_in_gen_0_01,
+                df_differences_list,
                 feature_name,
                 function_id,
             )
