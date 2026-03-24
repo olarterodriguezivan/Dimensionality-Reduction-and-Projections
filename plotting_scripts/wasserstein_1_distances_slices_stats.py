@@ -49,7 +49,7 @@ DATASET_200_CONSIDERED_SEEDS = [*range(1001,1041)] # Seeds to consider for DATAS
 EPSILON = 1e-9 # To avoid log(0) or ./0 issues
 
 ROOT_DIRECTORY = Path(__file__).resolve().parent
-SAVE_FIGURE_DIRECTORY = ROOT_DIRECTORY.joinpath("tables_wasserstein_1_distances_slices_stats")
+SAVE_FIGURE_DIRECTORY = ROOT_DIRECTORY.joinpath("tables_wasserstein_2_distances_slices_stats")
 
 DATA_SIZES = [200, 2000]
 REDUCTION_RATIOS = [0.5, 0.25, 0.1]
@@ -506,7 +506,8 @@ def compute_wasserstein_distance_slices(ref_dataset:pd.DataFrame,
 def heatmap_wasserstein_rankings_2(combined_df: pd.DataFrame, 
                                    function_id_list:List[int],
                                    feature_name_list:List[str],
-                                   agg:str="median") -> Tuple[plt.Figure, plt.Axes]:
+                                   agg:str="median",
+                                   significance_df: pd.DataFrame = None) -> Tuple[plt.Figure, plt.Axes]:
     r"""
     A simplified version of the heatmap_wasserstein_rankings function that takes a single combined DataFrame as input.
     
@@ -517,7 +518,7 @@ def heatmap_wasserstein_rankings_2(combined_df: pd.DataFrame,
         function_id_list (List[int]): The list of function IDs to include in the heatmap.
         agg (str): The aggregation method to use when averaging Wasserstein distances across instances. 
                    Must be either 'mean' or 'median'. Default is 'median'.
-    
+        significance_df (pd.DataFrame, optional): A DataFrame containing significance information for the heatmap.
     Returns
     --------------
         Tuple[plt.Figure, plt.Axes]: The matplotlib Figure and Axes objects containing the plot.
@@ -587,6 +588,14 @@ def heatmap_wasserstein_rankings_2(combined_df: pd.DataFrame,
     df_plot["winner_code"] = df_plot["winner"].map(dataset_to_code)
     df_plot["second_marker"] = df_plot["second"].map(dataset_to_marker)
 
+    if significance_df is not None:
+        sig_lookup = {
+            (r.function_id, r.feature_name): r.significant
+            for _, r in significance_df.iterrows()
+        }
+    else:
+        sig_lookup = {}
+
     # ---------------------------------------------------------
     # 4) Pivot
     # ---------------------------------------------------------
@@ -634,6 +643,12 @@ def heatmap_wasserstein_rankings_2(combined_df: pd.DataFrame,
 
         if pd.isna(r["second_marker"]):
             continue
+
+        # 🚫 Skip if significant difference
+        if significance_df is not None:
+            key = (r["function_id"], r["feature_name"])
+            if key in sig_lookup and sig_lookup[key]:
+                continue
 
         if r["feature_name"] not in feature_to_x:
             continue
@@ -1165,9 +1180,6 @@ def main() -> None:
         df_wasserstein_slices_all_in_0_05_0,
         df_wasserstein_slices_all_in_0_025_0,
         df_wasserstein_slices_all_in_0_01_0,
-        #df_wasserstein_slices_0_05_gen,
-        #df_wasserstein_slices_0_025_gen,
-        #df_wasserstein_slices_0_01_gen,
         df_wasserstein_slices_all_in_0_05_gen,
         df_wasserstein_slices_all_in_0_025_gen,
         df_wasserstein_slices_all_in_0_01_gen,
@@ -1245,6 +1257,7 @@ def main() -> None:
         FUNCTION_IDS,
         all_feature_names,
         agg="median",
+        significance_df=df_significance,
     )
 
     fig.savefig(SAVE_FIGURE_DIRECTORY / f"wasserstein_ranking_heatmap_mode_{MODE}.pdf", dpi=300)

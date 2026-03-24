@@ -987,7 +987,10 @@ def violin_plots_of_differences_global_2(
     df_plot = prepare(df_list)
 
     # --- Plot ---
-    fig, ax = plt.subplots(figsize=(4, 6))
+    fig, ax = plt.subplots(figsize=(7, 5))
+
+    # Plot the horizontal line at y=0
+    ax.axhline(0, color="red", linestyle="--", linewidth=0.5, alpha=0.7)
 
     sns.violinplot(
         data=df_plot,
@@ -997,99 +1000,24 @@ def violin_plots_of_differences_global_2(
         ax=ax,
     )
 
-    #ax.set_ylim(-2, 2)
-    ax.set_title(f"Relative differences – function {function_id}")
+    ax.set_title(f"Relative differences – f{function_id}")
     ax.set_ylabel("Relative difference")
     ax.set_xlabel("Feature")
     ax.grid(True, axis="y", linestyle="--", alpha=0.5)
 
-    plt.tight_layout()
+    # Change the legend position (outside) and title
+    legend = ax.legend(title="Method",
+    bbox_to_anchor=(1.02, 1),
+    loc="upper left",
+    borderaxespad=0)
+
+    # 🔧 Force font sizes
+    for text in legend.get_texts():
+        text.set_fontsize(8)
+
+    legend.get_title().set_fontsize(10)
 
     return fig, ax
-# def violin_plots_of_differences_global_2(
-#     df_differences_full: pd.DataFrame,
-#     df_differences_reduced_05: pd.DataFrame,
-#     df_differences_reduced_025: pd.DataFrame,
-#     df_differences_reduced_01: pd.DataFrame,
-#     df_differences_slices_0_05: pd.DataFrame,
-#     df_differences_slices_gen_05: pd.DataFrame,
-#     df_differences_slices_0_025: pd.DataFrame,
-#     df_differences_slices_gen_025: pd.DataFrame,
-#     df_differences_slices_0_01: pd.DataFrame,
-#     df_differences_slices_gen_01: pd.DataFrame,
-#     df_differences_slices_all_in_0_05: pd.DataFrame,
-#     df_differences_slices_all_in_gen_0_05: pd.DataFrame,
-#     df_differences_slices_all_in_0_025: pd.DataFrame,
-#     df_differences_slices_all_in_gen_0_025: pd.DataFrame,
-#     df_differences_slices_all_in_0_01: pd.DataFrame,
-#     df_differences_slices_all_in_gen_0_01: pd.DataFrame,
-#     feature_name: str,
-#     function_id: int,
-#     instance_id_list: List[int] = INSTANCE_IDS,
-# ) -> Tuple[plt.Figure, plt.Axes]:
-#     """
-#     Create violin plots of relative differences for a single feature
-#     and a single function across different dataset variants.
-#     """
-
-#     ratio_col = f"ratio_{feature_name}"
-
-#     # --- Helper ---
-#     def prepare(df: pd.DataFrame, label: str) -> pd.DataFrame:
-#         out = df.loc[
-#             (df["function_idx"] == function_id)
-#             & (df["instance_idx"].isin(instance_id_list)),
-#             ["instance_idx", ratio_col],
-#         ].copy()
-
-#         out["dataset"] = label
-#         out["feature"] = feature_name
-#         out.rename(columns={ratio_col: "ratio"}, inplace=True)
-#         return out
-
-#     # --- Prepare datasets ---
-#     df_plot = pd.concat(
-#         [
-#             prepare(df_differences_full, "Full (200 vs 2000)"),
-#             prepare(df_differences_reduced_05, "Reduced 0.5"),
-#             prepare(df_differences_reduced_025, "Reduced 0.25"),
-#             prepare(df_differences_reduced_01, "Reduced 0.1"),
-#             prepare(df_differences_slices_0_05, "Sliced 0 – 0.5"),
-#             prepare(df_differences_slices_gen_05, "Sliced gen – 0.5"),
-#             prepare(df_differences_slices_0_025, "Sliced 0 – 0.25"),
-#             prepare(df_differences_slices_gen_025, "Sliced gen – 0.25"),
-#             prepare(df_differences_slices_0_01, "Sliced 0 – 0.1"),
-#             prepare(df_differences_slices_gen_01, "Sliced gen – 0.1"),
-#             prepare(df_differences_slices_all_in_0_05, "Sliced all in – 0.5"),
-#             prepare(df_differences_slices_all_in_gen_0_05, "Sliced all in gen – 0.5"),
-#             prepare(df_differences_slices_all_in_0_025, "Sliced all in – 0.25"),
-#             prepare(df_differences_slices_all_in_gen_0_025, "Sliced all in gen – 0.25"),
-#             prepare(df_differences_slices_all_in_0_01, "Sliced all in – 0.1"),
-#             prepare(df_differences_slices_all_in_gen_0_01, "Sliced all in gen – 0.1"),
-#         ],  
-#         ignore_index=True,
-#     )
-
-#     # --- Plot ---
-#     fig, ax = plt.subplots(figsize=(4, 6))
-
-#     sns.violinplot(
-#         data=df_plot,
-#         x="feature",
-#         y="ratio",
-#         hue="dataset",
-#         ax=ax,
-#         cut=0,
-#     )
-
-#     ax.set_title(f"Relative differences – function {function_id}")
-#     ax.set_ylabel("Relative difference")
-#     ax.set_xlabel("Feature")
-#     ax.grid(True, axis="y", linestyle="--", alpha=0.5)
-
-#     plt.tight_layout()
-
-#     return fig, ax
 
 
 
@@ -1235,19 +1163,14 @@ def main() -> None:
     # Make a combined dataset for plotting
     df_differences_list = combine_differences_results(
         [df_differences_full,
-        # df_differences_reduced_05,
-        # df_differences_reduced_025,
         df_differences_slices_0_05,
-        # df_differences_slices_gen_05,
         df_differences_slices_0_025,
-        # df_differences_slices_gen_025,
         df_differences_slices_0_01,
-        # df_differences_slices_gen_01,
         df_differences_slices_all_in_0_05,
-        df_differences_slices_all_in_gen_0_05,
         df_differences_slices_all_in_0_025,
-        df_differences_slices_all_in_gen_0_025,
         df_differences_slices_all_in_0_01,
+        df_differences_slices_all_in_gen_0_05,
+        df_differences_slices_all_in_gen_0_025,
         df_differences_slices_all_in_gen_0_01],
         ["Full/ELA$_{\\mathrm{A}}$",
         "Sliced/ELA$_{\\mathrm{A}},r=0.5$",
@@ -1298,7 +1221,7 @@ def main() -> None:
             fig.savefig(
             figure_path / "violin_plot_comparison_all_variants.pdf",
             dpi=300,
-            #bbox_inches="tight",
+            bbox_inches="tight",
             )
 
             plt.close(fig)
