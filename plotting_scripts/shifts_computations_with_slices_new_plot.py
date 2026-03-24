@@ -1233,45 +1233,12 @@ def main() -> None:
         agg="median"
     )
 
-    # # Get the differences between full and reduced datasets
-    # df_differences_reduced_05 = compute_differences_in_reduced(
-    #     datasets[("full", 2000, None)],
-    #     #datasets[("reduced", 200, 0.5)],
-    #     datasets[("oneshot", 200, 0.5)],
-    #     all_feature_names,
-    #     agg="median"
-    # )
-
-    # # Get the differences between full and reduced datasets
-    # df_differences_reduced_025 = compute_differences_in_reduced(
-    #     datasets[("full", 2000, None)],
-    #     #datasets[("reduced", 200, 0.5)],
-    #     datasets[("oneshot", 200, 0.25)],
-    #     all_feature_names,
-    #     agg="median"
-    # )
-
-    # df_differences_reduced_01 = compute_differences_in_reduced(
-    #     datasets[("full", 2000, None)],
-    #     #datasets[("reduced", 200, 0.5)],
-    #     datasets[("oneshot", 200, 0.1)],
-    #     all_feature_names,
-    #     agg="median"
-    # )
-
     df_differences_slices_0_05 = compute_differences_in_slices_0(
         datasets[("full", 2000, None)],
         datasets[("slices", 200, 0.5)],
         all_feature_names,
         agg="median"
     )
-
-    # df_differences_slices_gen_05 = compute_differences_in_slices_general(
-    #     datasets[("full", 2000, None)],
-    #     datasets[("slices", 200, 0.5)],
-    #     all_feature_names,
-    #     agg="median"
-    # )
 
     # Get the differences between full and slices datasets
     df_differences_slices_0_025 = compute_differences_in_slices_0(
@@ -1281,26 +1248,12 @@ def main() -> None:
         agg="median"
     )
 
-    # df_differences_slices_gen_025 = compute_differences_in_slices_general(
-    #     datasets[("full", 2000, None)],
-    #     datasets[("slices", 200, 0.25)],
-    #     all_feature_names,
-    #     agg="median"
-    # )
-
     df_differences_slices_0_01 = compute_differences_in_slices_0(
         datasets[("full", 2000, None)],
         datasets[("slices", 200, 0.1)],
         all_feature_names,
         agg="median"
     )
-
-    # df_differences_slices_gen_01 = compute_differences_in_slices_general(
-    #     datasets[("full", 2000, None)],
-    #     datasets[("slices", 200, 0.1)],
-    #     all_feature_names,
-    #     agg="median"
-    # )
 
     df_differences_slices_all_in_0_05 = compute_differences_in_slices_general(
         datasets[("full", 2000, None)],
@@ -1346,19 +1299,14 @@ def main() -> None:
 
     df_differences_list = combine_differences_results(
         [df_differences_full,
-        # df_differences_reduced_05,
-        # df_differences_reduced_025,
         df_differences_slices_0_05,
-        # df_differences_slices_gen_05,
         df_differences_slices_0_025,
-        # df_differences_slices_gen_025,
         df_differences_slices_0_01,
-        # df_differences_slices_gen_01,
         df_differences_slices_all_in_0_05,
-        df_differences_slices_gen_all_in_0_05,
         df_differences_slices_all_in_0_025,
-        df_differences_slices_gen_all_in_0_025,
         df_differences_slices_all_in_0_01,
+        df_differences_slices_gen_all_in_0_05,
+        df_differences_slices_gen_all_in_0_025,
         df_differences_slices_gen_all_in_0_01],
         ["Full/ELA$_{\\mathrm{A}}$",
         "Sliced/ELA$_{\\mathrm{A}},r=0.5$",

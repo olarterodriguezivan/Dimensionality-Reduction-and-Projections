@@ -486,7 +486,9 @@ def save_all_feature_plots(
 
             figure_path = output_dir / f"function_id_{function_id}" / f"feature_{feature_name}"
             figure_path.mkdir(parents=True, exist_ok=True)
-            fig.savefig(figure_path / "violin_plot_comparison_all_variants.pdf", dpi=300, bbox_inches="tight")
+            fig.savefig(figure_path / "violin_plot_comparison_all_variants.pdf", 
+                        dpi=300, 
+                        bbox_inches="tight")
             plt.close(fig)
 
 
@@ -496,7 +498,10 @@ def save_all_feature_plots(
 def main() -> None:
     datasets = load_all_datasets()
 
-    reference_df = datasets[DatasetKey("reduced", 200, 0.5)]
+    reference_df = datasets[DatasetKey("reduced", 
+                                       200, 
+                                       0.5)]
+    
     feature_cols = get_feature_columns(reference_df, EXCLUDED_COLUMNS)
 
     difference_tables = build_difference_tables(datasets, feature_cols, agg="median")
