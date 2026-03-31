@@ -25,7 +25,8 @@ import matplotlib.pyplot as plt
 
 DATASET_SIZE:int = 200  # Number of samples in the dataset
 REDUCTION_RATIO:float = 0.25  # Reduction ratio used
-FUNCTION_IDS:list = [1, 8, 11, 16, 20]  # Function IDs to consider
+#FUNCTION_IDS:list = [1, 8, 11, 16, 20]  # Function IDs to consider
+FUNCTION_IDS:list = [*range(1, 25)]  # Function IDs to consider
 INSTANCE_IDS:list = [*range(15)]  # Instance IDs to consider
 
 DATASET_2000_CONSIDERED_SEEDS = [*range(2001,2041)] # Seeds to consider for DATASET_SIZE = 2000
@@ -102,13 +103,13 @@ def choose_reduced_feature_file_one_shot(data_size:int, reduction_ratio:float) -
     """
 
     if data_size == 200 and reduction_ratio == 0.25:
-        return "reduced_oneshot_1_200_0.25.parquet"
+        return "reduced_oneshot_3_200_0.25.parquet"
     elif data_size == 200 and reduction_ratio == 0.5:
-        return "reduced_oneshot_1_200_0.5.parquet"
+        return "reduced_oneshot_3_200_0.5.parquet"
     elif data_size == 2000 and reduction_ratio == 0.25:
-        return "reduced_oneshot_2_2000_0.25.parquet"
+        return "reduced_oneshot_3_2000_0.25.parquet"
     elif data_size == 2000 and reduction_ratio == 0.5:
-        return "reduced_oneshot_2_2000_0.5.parquet"
+        return "reduced_oneshot_3_2000_0.5.parquet"
     else:
         raise ValueError("Unsupported combination of DATASET_SIZE and REDUCTION_RATIO")
 

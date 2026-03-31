@@ -26,6 +26,7 @@ import matplotlib.pyplot as plt
 ## =============================
 
 FUNCTION_IDS:list = [1, 8, 11, 16, 20]  # Function IDs to consider
+FUNCTION_IDS_COMPLETE:list = [*range(1, 25)]  # All function IDs in the dataset
 #FUNCTION_IDS:list = [20]  # Function IDs to consider
 INSTANCE_IDS:list = [*range(15)]  # Instance IDs to consider
 
@@ -94,7 +95,7 @@ def choose_reduced_feature_file_one_shot(data_size:int, reduction_ratio:float) -
     Args
     --------------
     data_size (int): The size of the dataset (e.g., 200 or 2000).
-    reduction_ratio (float): The reduction ratio (e.g., 0.25 or 0.5).
+    reduction_ratio (float): The reduction ratio (e.g., 0.1, 0.25 or 0.5).
     
     Returns
     --------------
@@ -103,13 +104,17 @@ def choose_reduced_feature_file_one_shot(data_size:int, reduction_ratio:float) -
     """
 
     if data_size == 200 and reduction_ratio == 0.25:
-        return "reduced_oneshot_1_200_0.25.parquet"
+        return "reduced_oneshot_3_200_0.25.parquet"
     elif data_size == 200 and reduction_ratio == 0.5:
-        return "reduced_oneshot_1_200_0.5.parquet"
+        return "reduced_oneshot_3_200_0.5.parquet"
     elif data_size == 2000 and reduction_ratio == 0.25:
-        return "reduced_oneshot_2_2000_0.25.parquet"
+        return "reduced_oneshot_3_2000_0.25.parquet"
     elif data_size == 2000 and reduction_ratio == 0.5:
-        return "reduced_oneshot_2_2000_0.5.parquet"
+        return "reduced_oneshot_3_2000_0.5.parquet"
+    elif data_size == 200 and reduction_ratio == 0.1:
+        return "reduced_oneshot_3_200_0.1.parquet"
+    elif data_size == 2000 and reduction_ratio == 0.1:
+        return "reduced_oneshot_3_2000_0.1.parquet"
     else:
         raise ValueError("Unsupported combination of DATASET_SIZE and REDUCTION_RATIO")
 
@@ -193,7 +198,7 @@ def select_only_required_function_ids(df:pd.DataFrame) -> pd.DataFrame:
     pd.DataFrame: The DataFrame filtered to include only the required function IDs.
     """
 
-    filtered_df = df[df['function_idx'].isin(FUNCTION_IDS)].copy()
+    filtered_df = df[df['function_idx'].isin(FUNCTION_IDS_COMPLETE)].copy()
     return filtered_df
 
 
@@ -888,7 +893,7 @@ def plot_heatmaps(
         .agg(agg_fn)
         .unstack("feature")
         .reindex(columns=feature_name_list)  # final safety net
-        .loc[function_id_list]
+        .reindex(index=function_id_list)
     )
 
     # ------------------------------------------------------------------
@@ -937,6 +942,8 @@ def plot_heatmaps(
     ax.set_xlabel("Feature")
     ax.set_ylabel("Function ID")
     ax.tick_params(axis="x", rotation=90)
+    ax.tick_params(axis="y",rotation =0)
+    
 
     if show_fig:
         plt.show()
@@ -967,13 +974,7 @@ def main() -> None:
     reduced = {}
 
     for dataset_size in [2000, 200]:
-        for reduction_ratio in [0.25, 0.5]:
-            # standard reduction
-            reduced[(dataset_size, reduction_ratio, "")] = load_and_process(
-                choose_reduced_feature_file,
-                dataset_size,
-                reduction_ratio,
-            )
+        for reduction_ratio in [0.1,0.25, 0.5]:
 
             # one-shot reduction
             reduced[(dataset_size, reduction_ratio, "oneshot")] = load_and_process(
@@ -982,6 +983,17 @@ def main() -> None:
                 reduction_ratio,
             )
 
+            # standard reduction
+            if reduction_ratio == 0.1:
+                continue
+
+            reduced[(dataset_size, reduction_ratio, "")] = load_and_process(
+                choose_reduced_feature_file,
+                dataset_size,
+                reduction_ratio,
+            )
+
+            
     # -------------------------
     # Feature list
     # -------------------------
@@ -1004,7 +1016,7 @@ def main() -> None:
     # Experiment grid
     # -------------------------
     agg_fns = ["mean", "median"]
-    reduction_ratios = [0.25, 0.5]
+    reduction_ratios = [0.1, 0.25, 0.5]
     dataset_sizes = [2000, 200]
     estimation_types = ["", "oneshot"]
 
@@ -1023,24 +1035,48 @@ def main() -> None:
                     if dataset_size == 200 and reduction_ratio == 0.25 and estimation_type == "":
                         continue
 
+                    if dataset_size == 200 and reduction_ratio == 0.1 and estimation_type == "":
+                        continue
+
+                    if dataset_size == 2000 and reduction_ratio == 0.1 and estimation_type == "":
+                        continue
+
                     df_reduced = reduced[key]
                     df_full_cur = df_full[dataset_size]
 
-                    fig, ax = plot_heatmaps(
-                        df_full_cur,
-                        df_reduced,
-                        feature_name_list=all_feature_names,
-                        reduction_ratio=reduction_ratio,
-                        data_size=dataset_size,
-                        function_id_list=FUNCTION_IDS,
-                        instance_id_list=INSTANCE_IDS,
-                        agg_fn=agg_fn,
-                        show_fig=False,
-                        fig_size=(16, 1.5),
-                        absolute_distance=True,
-                        annotate=False,
-                        log_scale=True,
-                    )
+                    if estimation_type == "oneshot":
+                        fig, ax = plot_heatmaps(
+                            df_full_cur,
+                            df_reduced,
+                            feature_name_list=all_feature_names,
+                            reduction_ratio=reduction_ratio,
+                            data_size=dataset_size,
+                            function_id_list=FUNCTION_IDS_COMPLETE,
+                            instance_id_list=INSTANCE_IDS,
+                            agg_fn=agg_fn,
+                            show_fig=False,
+                            fig_size=(16, 6),
+                            absolute_distance=True,
+                            annotate=False,
+                            log_scale=True,
+                        )
+                    
+                    else:
+                        fig, ax = plot_heatmaps(
+                            df_full_cur,
+                            df_reduced,
+                            feature_name_list=all_feature_names,
+                            reduction_ratio=reduction_ratio,
+                            data_size=dataset_size,
+                            function_id_list=FUNCTION_IDS,
+                            instance_id_list=INSTANCE_IDS,
+                            agg_fn=agg_fn,
+                            show_fig=False,
+                            fig_size=(16, 1.5),
+                            absolute_distance=True,
+                            annotate=False,
+                            log_scale=True,
+                        )
 
                     # -------------------------
                     # Save figure

@@ -707,6 +707,344 @@ def heatmap_wasserstein_rankings_2(combined_df: pd.DataFrame,
     return fig, ax
 
 
+def heatmap_wasserstein_rankings_3(
+    combined_df: pd.DataFrame, 
+    function_id_list: List[int],
+    feature_name_list: List[str],
+    agg: str = "median",
+) -> Tuple[plt.Figure, plt.Axes]:
+
+    # ---------------------------------------------------------
+    # Extract reduction ratio r from method
+    # ---------------------------------------------------------
+    df_all = combined_df.copy()
+    df_all["r"] = (
+        df_all["method"]
+        .str.extract(r"r=([0-9.]+)")
+        .astype(float)
+    )
+
+    # Optional: assign value to "Full" (no r)
+    df_all["r"] = df_all["r"].fillna(1.0)
+
+    dataset_order = df_all["method"].unique().tolist()
+
+    # markers for second-best
+    markers = [
+        "o", "s", "D", "^", "v", "<", ">", "P",
+        "X", "*", "h", "H", "8", "p", "d", "|"
+    ]
+
+    dataset_to_marker = {
+        ds: markers[i] for i, ds in enumerate(dataset_order)
+    }
+
+    # ---------------------------------------------------------
+    # Filter
+    # ---------------------------------------------------------
+    df_all = df_all[
+        df_all["feature_name"].isin(feature_name_list)
+        & df_all["function_id"].isin(function_id_list)
+    ]
+
+    # ---------------------------------------------------------
+    # Aggregate
+    # ---------------------------------------------------------
+    df_agg = (
+        df_all
+        .groupby(["function_id", "feature_name", "method"])["wasserstein_distance"]
+        .agg(agg)
+        .reset_index()
+    )
+
+    # ---------------------------------------------------------
+    # Rank (LOWER is better)
+    # ---------------------------------------------------------
+    df_ranked = (
+        df_agg
+        .sort_values(["function_id", "feature_name", "wasserstein_distance"])
+        .groupby(["function_id", "feature_name"], group_keys=False)
+        .apply(lambda x: x.assign(rank=np.arange(1, len(x) + 1)))
+    )
+
+    df_winner = df_ranked[df_ranked["rank"] == 1][
+        ["function_id", "feature_name", "method"]
+    ].rename(columns={"method": "winner"})
+
+    df_second = df_ranked[df_ranked["rank"] == 2][
+        ["function_id", "feature_name", "method"]
+    ].rename(columns={"method": "second"})
+
+    df_plot = df_winner.merge(
+        df_second,
+        on=["function_id", "feature_name"],
+        how="left",
+    )
+
+    # ---------------------------------------------------------
+    # Map method -> r
+    # ---------------------------------------------------------
+    method_to_r = (
+        df_all[["method", "r"]]
+        .drop_duplicates()
+        .set_index("method")["r"]
+        .to_dict()
+    )
+
+    df_plot["winner_r"] = df_plot["winner"].map(method_to_r)
+
+    # ---------------------------------------------------------
+    # Encode r as colors
+    # ---------------------------------------------------------
+    r_values = sorted(df_plot["winner_r"].dropna().unique())
+    r_to_code = {r: i for i, r in enumerate(r_values)}
+    df_plot["winner_code"] = df_plot["winner_r"].map(r_to_code)
+
+    # markers for second-best
+    #df_plot["second_marker"] = df_plot["second"].map(dataset_to_marker)
+    df_plot["winner_marker"] = df_plot["winner"].map(dataset_to_marker)
+
+    # ---------------------------------------------------------
+    # Pivot
+    # ---------------------------------------------------------
+    heatmap = df_plot.pivot(
+        index="function_id",
+        columns="feature_name",
+        values="winner_code",
+    )
+
+    heatmap = heatmap.reindex(index=function_id_list)
+    heatmap = heatmap[feature_name_list]
+
+    # ---------------------------------------------------------
+    # Colormap based on r
+    # ---------------------------------------------------------
+    r_colors = plt.get_cmap("viridis")(np.linspace(0, 1, len(r_values)))
+
+    cmap = ListedColormap(r_colors)
+    norm = BoundaryNorm(
+        np.arange(-0.5, len(r_values) + 0.5, 1),
+        cmap.N,
+    )
+
+    fig, ax = plt.subplots(
+        figsize=(0.3 * heatmap.shape[1], 0.5 * heatmap.shape[0])
+    )
+
+    sns.heatmap(
+        heatmap,
+        cmap=cmap,
+        norm=norm,
+        linewidths=0.3,
+        cbar=False,
+        ax=ax,
+    )
+
+    # ---------------------------------------------------------
+    # Overlay runner-up markers
+    # ---------------------------------------------------------
+    feature_to_x = {f: i for i, f in enumerate(heatmap.columns)}
+    function_to_y = {f: i for i, f in enumerate(heatmap.index)}
+
+    for _, r in df_plot.iterrows():
+
+        if pd.isna(r["winner_marker"]):
+            continue
+
+        if r["feature_name"] not in feature_to_x:
+            continue
+        if r["function_id"] not in function_to_y:
+            continue
+
+        ax.scatter(
+            feature_to_x[r["feature_name"]] + 0.5,
+            function_to_y[r["function_id"]] + 0.5,
+            marker=r["winner_marker"],
+            s=60,
+            facecolors="none",
+            edgecolors="black",
+            linewidths=1,
+            zorder=10,
+        )
+
+    ax.set_xlabel("Feature")
+    ax.set_ylabel("Function")
+
+    # ---------------------------------------------------------
+    # Legend (r-based colors)
+    # ---------------------------------------------------------
+    color_legend = ax.legend(
+        handles=[
+            Patch(color=r_colors[i], label=f"r = {r_values[i]}")
+            for i in range(len(r_values))
+        ],
+        title="Winning reduction ratio",
+        bbox_to_anchor=(1.02, 1),
+        loc="upper left",
+    )
+    ax.add_artist(color_legend)
+
+    # second-best legend (methods)
+    ax.legend(
+        handles=[
+            Line2D(
+                [0], [0],
+                marker=m,
+                color="black",
+                linestyle="None",
+                markerfacecolor="none",
+                markersize=8,
+                label=ds,
+            )
+            for ds, m in dataset_to_marker.items()
+        ],
+        title="Best method",
+        bbox_to_anchor=(1.02, 0.1),
+        loc="upper left",
+    )
+
+    plt.tight_layout()
+    return fig, ax
+
+
+def plot_parallel_function_overlay(df_rank, method_order=None):
+    """
+    Overlay FINAL rank and AVERAGE rank in one parallel plot (per function).
+    """
+
+    # Pivot tables
+    df_final = df_rank.pivot(
+        index="method",
+        columns="function_id",
+        values="final_rank"
+    )
+
+    df_avg = df_rank.pivot(
+        index="method",
+        columns="function_id",
+        values="aggregated_feature_rank"
+    )
+
+    # Ensure same column order
+    df_final = df_final.sort_index(axis=1)
+    df_avg = df_avg[df_final.columns]
+
+    # Reindex ensures correct order
+    df_final = df_final.reindex(method_order)
+    df_avg   = df_avg.reindex(method_order)
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    colors = plt.get_cmap("tab10").colors
+
+    for i, method in enumerate(df_final.index):
+
+        if method not in df_final.index:
+            continue
+
+        color = colors[i % len(colors)]
+
+        # --- Average rank (smooth, main signal)
+        ax.plot(
+            df_avg.columns,
+            df_avg.loc[method],
+            color=color,
+            linewidth=2,
+            label=method
+        )
+
+        # --- Final rank (discrete, overlay)
+        ax.plot(
+            df_final.columns,
+            df_final.loc[method],
+            linestyle="--",
+            marker="o",
+            color=color,
+            alpha=0.7
+        )
+
+    ax.invert_yaxis()
+    ax.set_xticks(np.arange(1,25,1))
+    ax.set_yticks(np.arange(1,11,1))
+    ax.set_xlabel("Function ID")
+    ax.set_ylabel("Rank (lower = better)")
+    ax.set_title("Parallel Plot — Final vs Average Ranking (Functions)")
+
+    ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+    ax.grid(True)
+
+    return fig, ax
+
+
+def plot_parallel_feature_overlay(df_rank_feat, method_order=None):
+    """
+    Overlay FINAL rank and AVERAGE rank in one parallel plot (per feature).
+    """
+
+    df_final = df_rank_feat.pivot(
+        index="method",
+        columns="feature_name",
+        values="final_rank"
+    )
+
+    df_avg = df_rank_feat.pivot(
+        index="method",
+        columns="feature_name",
+        values="aggregated_function_rank"
+    )
+
+    df_final = df_final.sort_index(axis=1)
+    df_avg = df_avg[df_final.columns]
+
+    # Reindex ensures correct order
+    df_final = df_final.reindex(method_order)
+    df_avg   = df_avg.reindex(method_order)
+
+    fig, ax = plt.subplots(figsize=(12, 5))
+
+    colors = plt.get_cmap("tab10").colors
+
+    for i, method in enumerate(df_final.index):
+
+        if method not in df_final.index:
+            continue
+
+        color = colors[i % len(colors)]
+
+        # Average rank
+        ax.plot(
+            range(len(df_avg.columns)),
+            df_avg.loc[method],
+            color=color,
+            linewidth=2,
+            label=method
+        )
+
+        # Final rank
+        ax.plot(
+            range(len(df_final.columns)),
+            df_final.loc[method],
+            linestyle="--",
+            marker="o",
+            color=color,
+            alpha=0.7
+        )
+
+    ax.invert_yaxis()
+
+    ax.set_yticks(np.arange(1,11,1))
+
+    ax.set_xticks(range(len(df_final.columns)))
+    ax.set_xticklabels(df_final.columns, rotation=90)
+    ax.set_xlabel("Feature")
+    ax.set_ylabel("Rank (lower = better)")
+    ax.set_title("Parallel Plot — Final vs Average Ranking (Features)")
+
+    ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+    ax.grid(True)
+
+    return fig, ax
+
 
 def combine_wasserstein_results(
     list_of_dfs: List[pd.DataFrame],
@@ -756,6 +1094,7 @@ def _aggregate_instances_per_feature(
         .agg(agg)
         .reset_index()
     )
+    
     return out
 
 
@@ -775,6 +1114,7 @@ def best_method_per_function_rank_based(
        (lower is better).
     3. Aggregate these ranks across features for each (function, method).
     4. Rank methods within each function based on the aggregated feature-rank score.
+    5. Compute the standard deviation/error of the feature-wise ranks for each (function, method) to indicate consistency across features.
 
     This avoids aggregating raw Wasserstein distances across features, which may
     be on different scales.
@@ -818,6 +1158,13 @@ def best_method_per_function_rank_based(
         .astype(int)
     )
 
+    # Step 5: Add standard deviation of feature ranks for each (function, method)
+    df_func["rank_std_dev"] = (
+        df_feat.groupby("function_id")["feature_rank"]
+        .std()
+        .reset_index(name="rank_std_dev")
+    )
+
     return df_func.sort_values(["function_id", "final_rank", "method"]).reset_index(drop=True)
 
 
@@ -836,6 +1183,7 @@ def best_method_per_feature_rank_based(
     2. For each (function, feature), rank methods by Wasserstein distance.
     3. Aggregate these ranks across functions for each (feature, method).
     4. Rank methods within each feature.
+    5. Add a standard deviation/error measure to the final ranking to indicate consistency across functions.
 
     Args
     --------------
@@ -874,6 +1222,13 @@ def best_method_per_feature_rank_based(
         .rank(method="average", ascending=True)
         .astype(int)
     )
+
+    # Step 5: Add standard deviation of ranks across functions for each (feature, method)
+    df_feature["rank_std_dev"] = (
+        df_feat.groupby("feature_name")["feature_rank"]
+        .std()
+        .reset_index(name="rank_std_dev")
+    )   
 
     return df_feature.sort_values(["feature_name", "final_rank", "method"]).reset_index(drop=True)
 
@@ -1099,29 +1454,6 @@ def main() -> None:
         INSTANCE_IDS
     )
 
-    # df_wasserstein_reduced_05 = compute_wasserstein_distance(
-    #     datasets[("full", 2000, None)],
-    #     datasets[("oneshot", 200, 0.5)],
-    #     all_feature_names,
-    #     FUNCTION_IDS,
-    #     INSTANCE_IDS
-    # )
-
-    # df_wasserstein_reduced_025 = compute_wasserstein_distance(
-    #     datasets[("full", 2000, None)],
-    #     datasets[("oneshot", 200, 0.25)],
-    #     all_feature_names,
-    #     FUNCTION_IDS,
-    #     INSTANCE_IDS
-    # )
-
-    # df_wasserstein_reduced_01 = compute_wasserstein_distance(
-    #     datasets[("full", 2000, None)],
-    #     datasets[("oneshot", 200, 0.1)],
-    #     all_feature_names,
-    #     FUNCTION_IDS,
-    #     INSTANCE_IDS
-    # )
 
     df_wasserstein_slices_0_05_0, df_wasserstein_slices_0_05_gen = compute_wasserstein_distance_slices(
         datasets[("full", 2000, None)],
@@ -1171,6 +1503,19 @@ def main() -> None:
         INSTANCE_IDS
     )
 
+    method_order = [
+        "Full/ELA$_{\\mathrm{A}}$",
+        "Sliced/ELA$_{\\mathrm{A}},r=0.5$",
+        "Sliced/ELA$_{\\mathrm{A}},r=0.25$",
+        "Sliced/ELA$_{\\mathrm{A}},r=0.1$",
+        "All\_in/ELA$_{\\mathrm{A}},r=0.5$",
+        "All\_in/ELA$_{\\mathrm{A}},r=0.25$",
+        "All\_in/ELA$_{\\mathrm{A}},r=0.1$",
+        "All\_in/ELA$_{\\mathrm{R}},r=0.5$",
+        "All\_in/ELA$_{\\mathrm{R}},r=0.25$",
+        "All\_in/ELA$_{\\mathrm{R}},r=0.1$",
+    ]
+
     df_all_methods = combine_wasserstein_results(
     [
         df_wasserstein_full,
@@ -1184,22 +1529,8 @@ def main() -> None:
         df_wasserstein_slices_all_in_0_025_gen,
         df_wasserstein_slices_all_in_0_01_gen,
     ],
-    [
-        "Full/ELA$_{\\mathrm{A}}$",
-        "Sliced/ELA$_{\\mathrm{A}},r=0.5$",
-        "Sliced/ELA$_{\\mathrm{A}},r=0.25$",
-        "Sliced/ELA$_{\\mathrm{A}},r=0.1$",
-        "All\_in/ELA$_{\\mathrm{A}},r=0.5$",
-        "All\_in/ELA$_{\\mathrm{A}},r=0.25$",
-        "All\_in/ELA$_{\\mathrm{A}},r=0.1$",
-        #"SliceGen_05",
-        #"SliceGen_025",
-        #"SliceGen_01",
-        "All\_in/ELA$_{\\mathrm{R}},r=0.5$",
-        "All\_in/ELA$_{\\mathrm{R}},r=0.25$",
-        "All\_in/ELA$_{\\mathrm{R}},r=0.1$",
-    ]
-)
+    method_order
+    )
     
     # 1) Best method per function overall, using rank aggregation across features
     df_best_per_function = best_method_per_function_rank_based(
@@ -1248,7 +1579,16 @@ def main() -> None:
     df_best_per_feature.to_csv(SAVE_FIGURE_DIRECTORY / f"best_method_per_feature_mode_{MODE}.csv", index=False)
     df_significance.to_csv(SAVE_FIGURE_DIRECTORY / f"significance_best_vs_second_mode_{MODE}.csv", index=False)
     df_friedman.to_csv(SAVE_FIGURE_DIRECTORY / f"friedman_per_feature_mode_{MODE}.csv", index=False)
-    
+
+    fig, ax = plot_parallel_feature_overlay(df_best_per_feature, method_order)
+    fig.savefig(SAVE_FIGURE_DIRECTORY / f"wasserstein_ranking_parallel_feature_{MODE}.pdf", dpi=300, bbox_inches="tight")
+
+    plt.close(fig)
+
+    fig, ax = plot_parallel_function_overlay(df_best_per_function, method_order)
+    fig.savefig(SAVE_FIGURE_DIRECTORY / f"wasserstein_ranking_parallel_function_{MODE}.pdf", dpi=300, bbox_inches="tight")
+
+    plt.close(fig)
     
 
     # The heatmap of best methods per function-feature combination is quite large, so we save it as a separate figure.
@@ -1261,6 +1601,21 @@ def main() -> None:
     )
 
     fig.savefig(SAVE_FIGURE_DIRECTORY / f"wasserstein_ranking_heatmap_mode_{MODE}.pdf", dpi=300)
+
+    plt.close(fig)
+
+    # The heatmap of best methods per function-feature combination is quite large, so we save it as a separate figure.
+    fig, ax = heatmap_wasserstein_rankings_3(
+        df_all_methods,
+        FUNCTION_IDS,
+        all_feature_names,
+        agg="median",
+    )
+
+    fig.savefig(SAVE_FIGURE_DIRECTORY / f"wasserstein_ranking_heatmap_mode_{MODE}_r.pdf", dpi=300)
+
+    plt.close(fig)
+
 
    
 

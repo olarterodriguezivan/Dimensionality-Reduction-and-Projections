@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt
 ## =============================
 
 FUNCTION_IDS:list = [1, 8, 11, 16, 20]  # Function IDs to consider
+FUNCTION_IDS_COMPLETE:list = [*range(1,25)]  # All function IDs in the dataset
 #FUNCTION_IDS:list = [20]  # Function IDs to consider
 INSTANCE_IDS:list = [*range(15)]  # Instance IDs to consider
 
@@ -36,7 +37,7 @@ ROOT_DIRECTORY = Path(__file__).resolve().parent
 SAVE_FIGURE_DIRECTORY = ROOT_DIRECTORY.joinpath("figures_violin_plots_phase_3_2_mod_changed")
 
 DATA_SIZES = [200, 2000]
-REDUCTION_RATIOS = [0.5, 0.25]
+REDUCTION_RATIOS = [0.1, 0.25, 0.5]
 
 
 EXCLUDED_COLUMNS = {
@@ -114,15 +115,18 @@ def choose_reduced_feature_file_one_shot(data_size:int, reduction_ratio:float) -
     str: The filename of the reduced feature dataset corresponding to the given data size and reduction ratio.
     
     """
-
-    if data_size == 200 and reduction_ratio == 0.25:
-        return "reduced_oneshot_1_200_0.25.parquet"
+    if data_size == 200 and reduction_ratio == 0.1:
+        return "reduced_oneshot_3_200_0.1.parquet"
+    elif data_size == 200 and reduction_ratio == 0.25:
+        return "reduced_oneshot_3_200_0.25.parquet"
     elif data_size == 200 and reduction_ratio == 0.5:
-        return "reduced_oneshot_1_200_0.5.parquet"
+        return "reduced_oneshot_3_200_0.5.parquet"
+    elif data_size == 2000 and reduction_ratio == 0.1:
+        return "reduced_oneshot_3_2000_0.1.parquet"
     elif data_size == 2000 and reduction_ratio == 0.25:
-        return "reduced_oneshot_2_2000_0.25.parquet"
+        return "reduced_oneshot_3_2000_0.25.parquet"
     elif data_size == 2000 and reduction_ratio == 0.5:
-        return "reduced_oneshot_2_2000_0.5.parquet"
+        return "reduced_oneshot_3_2000_0.5.parquet"
     else:
         raise ValueError("Unsupported combination of DATASET_SIZE and REDUCTION_RATIO")
 
@@ -206,7 +210,7 @@ def select_only_required_function_ids(df:pd.DataFrame) -> pd.DataFrame:
     pd.DataFrame: The DataFrame filtered to include only the required function IDs.
     """
 
-    filtered_df = df[df['function_idx'].isin(FUNCTION_IDS)].copy()
+    filtered_df = df[df['function_idx'].isin(FUNCTION_IDS_COMPLETE)].copy()
     return filtered_df
 
 
@@ -249,17 +253,19 @@ def load_all_datasets():
 
         # Reduced datasets
         for ratio in REDUCTION_RATIOS:
-            reduced_file = choose_reduced_feature_file(n_samples, ratio)
-            datasets[("reduced", n_samples, ratio)] = process_dataframe(
-            load_dataset_as_pd_df(reduced_file), n_samples
-            )
-
 
             oneshot_file = choose_reduced_feature_file_one_shot(n_samples, ratio)
             datasets[("oneshot", n_samples, ratio)] = process_dataframe(
             load_dataset_as_pd_df(oneshot_file), n_samples
             )
 
+            if ratio == 0.1:
+                continue
+
+            reduced_file = choose_reduced_feature_file(n_samples, ratio)
+            datasets[("reduced", n_samples, ratio)] = process_dataframe(
+            load_dataset_as_pd_df(reduced_file), n_samples
+            )
 
     return datasets
 
@@ -843,7 +849,7 @@ def main() -> None:
     ]
 
 
-    for function_id in FUNCTION_IDS:
+    for function_id in FUNCTION_IDS_COMPLETE:
         print(f"Processing function ID: {function_id}")
 
 
@@ -858,12 +864,13 @@ def main() -> None:
 
 
                 df_full = datasets[("full", n_samples, None)]
-                df_reduced = datasets[("reduced", n_samples, ratio)]
+                df_reduced = datasets[("oneshot", n_samples, ratio)]
 
-                if n_samples == 200 and ratio == 0.25:
-                    continue
+                #if n_samples == 200 and ratio == 0.25:
+                #    continue
 
-                plot_color = "skyblue"
+                #plot_color = "skyblue"
+                plot_color = "orange"
 
 
                 fig, ax = plot_violin_plots_biased_3_v2(
@@ -894,7 +901,7 @@ def main() -> None:
 
 
                 fig.savefig(
-                figure_path / "violin_plot_corrected.pdf",
+                figure_path / "violin_plot_corrected_oneshot.pdf",
                 dpi=300,
                 bbox_inches="tight",
                 )

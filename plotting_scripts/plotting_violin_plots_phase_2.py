@@ -101,13 +101,17 @@ def choose_reduced_feature_file_one_shot(data_size:int, reduction_ratio:float) -
     """
 
     if data_size == 200 and reduction_ratio == 0.25:
-        return "reduced_oneshot_1_200_0.25.parquet"
+        return "reduced_oneshot_3_200_0.25.parquet"
     elif data_size == 200 and reduction_ratio == 0.5:
-        return "reduced_oneshot_1_200_0.5.parquet"
+        return "reduced_oneshot_3_200_0.5.parquet"
     elif data_size == 2000 and reduction_ratio == 0.25:
-        return "reduced_oneshot_2_2000_0.25.parquet"
+        return "reduced_oneshot_3_2000_0.25.parquet"
     elif data_size == 2000 and reduction_ratio == 0.5:
-        return "reduced_oneshot_2_2000_0.5.parquet"
+        return "reduced_oneshot_3_2000_0.5.parquet"
+    elif data_size == 200 and reduction_ratio == 0.1:
+        return "reduced_oneshot_3_200_0.1.parquet"
+    elif data_size == 2000 and reduction_ratio == 0.1:
+        return "reduced_oneshot_3_2000_0.1.parquet"
     else:
         raise ValueError("Unsupported combination of DATASET_SIZE and REDUCTION_RATIO")
 
