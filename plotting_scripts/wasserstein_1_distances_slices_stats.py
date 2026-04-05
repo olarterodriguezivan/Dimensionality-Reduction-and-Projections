@@ -644,11 +644,10 @@ def heatmap_wasserstein_rankings_2(combined_df: pd.DataFrame,
         if pd.isna(r["second_marker"]):
             continue
 
-        # 🚫 Skip if significant difference
+        is_significant = False
         if significance_df is not None:
             key = (r["function_id"], r["feature_name"])
-            if key in sig_lookup and sig_lookup[key]:
-                continue
+            is_significant = key in sig_lookup and sig_lookup[key]
 
         if r["feature_name"] not in feature_to_x:
             continue
@@ -657,15 +656,15 @@ def heatmap_wasserstein_rankings_2(combined_df: pd.DataFrame,
             continue
 
         ax.scatter(
-            feature_to_x[r["feature_name"]] + 0.5,
-            function_to_y[r["function_id"]] + 0.5,
-            marker=r["second_marker"],
-            s=60,
-            facecolors="none",
-            edgecolors="black",
-            linewidths=1,
-            zorder=10,
-        )
+                    feature_to_x[r["feature_name"]] + 0.5,
+                    function_to_y[r["function_id"]] + 0.5,
+                    marker=r["second_marker"],
+                    s=80 if not is_significant else 60,              # slightly bigger
+                    facecolors="black" if not is_significant else "none",  # filled if significant
+                    edgecolors="black",
+                    linewidths=2 if not is_significant else 1,      # thicker edge = bold
+                    zorder=10,
+                )
 
     ax.set_xlabel("Feature")
     ax.set_ylabel("Function")
@@ -907,67 +906,110 @@ def heatmap_wasserstein_rankings_3(
     return fig, ax
 
 
-def plot_parallel_function_overlay(df_rank, method_order=None):
-    """
+def plot_parallel_function_overlay(
+    df_rank: pd.DataFrame,
+    method_order=None,
+    plot_final_rank:bool=False,
+):
+    r"""
     Overlay FINAL rank and AVERAGE rank in one parallel plot (per function).
+
+    Args
+    --------------
+        df_rank (pd.DataFrame): A DataFrame containing columns 'method', 'function_id', 'aggregated_feature_rank', 'rank_std_err', and optionally 'final_rank'.
+        method_order (List[str], optional): A list specifying the order of methods to plot. If None, the order in df_rank will be used.
+        plot_final_rank (bool, optional): Whether to plot the final rank as an overlay. Default is False.
+    
+    Returns
+    --------------
+        Tuple[plt.Figure, plt.Axes]: The matplotlib Figure and Axes objects containing the plot.
     """
 
-    # Pivot tables
-    df_final = df_rank.pivot(
-        index="method",
-        columns="function_id",
-        values="final_rank"
-    )
-
+    # --- Pivot average + std error (always needed)
     df_avg = df_rank.pivot(
         index="method",
         columns="function_id",
-        values="aggregated_feature_rank"
+        values="aggregated_feature_rank",
     )
 
-    # Ensure same column order
-    df_final = df_final.sort_index(axis=1)
-    df_avg = df_avg[df_final.columns]
+    df_std_error = df_rank.pivot(
+        index="method",
+        columns="function_id",
+        values="rank_std_err",
+    )
 
-    # Reindex ensures correct order
-    df_final = df_final.reindex(method_order)
-    df_avg   = df_avg.reindex(method_order)
+    # --- Optional: final rank
+    if plot_final_rank:
+        df_final = df_rank.pivot(
+            index="method",
+            columns="function_id",
+            values="final_rank",
+        )
+        df_final = df_final.sort_index(axis=1)
 
+    # --- Ensure consistent column order
+    columns = sorted(df_avg.columns)
+    df_avg = df_avg[columns]
+    df_std_error = df_std_error[columns]
+
+    if plot_final_rank:
+        df_final = df_final[columns]
+
+    # --- Method order handling
+    if method_order is None:
+        method_order = df_avg.index.tolist()
+
+    df_avg = df_avg.reindex(method_order)
+    df_std_error = df_std_error.reindex(method_order)
+
+    if plot_final_rank:
+        df_final = df_final.reindex(method_order)
+
+    # --- Plot
     fig, ax = plt.subplots(figsize=(10, 5))
-
     colors = plt.get_cmap("tab10").colors
 
-    for i, method in enumerate(df_final.index):
+    for i, method in enumerate(df_avg.index):
 
-        if method not in df_final.index:
-            continue
+        if method not in df_avg.index:
+            continue  # (extra safety, but usually unnecessary)
 
         color = colors[i % len(colors)]
 
-        # --- Average rank (smooth, main signal)
+        # --- Average rank
         ax.plot(
             df_avg.columns,
             df_avg.loc[method],
             color=color,
             linewidth=2,
-            label=method
+            label=method,
         )
 
-        # --- Final rank (discrete, overlay)
-        ax.plot(
-            df_final.columns,
-            df_final.loc[method],
-            linestyle="--",
-            marker="o",
+        # --- Confidence interval
+        ax.fill_between(
+            df_avg.columns,
+            df_avg.loc[method] - 1.96 * df_std_error.loc[method],
+            df_avg.loc[method] + 1.96 * df_std_error.loc[method],
             color=color,
-            alpha=0.7
+            alpha=0.2,
         )
 
+        # --- Final rank overlay (optional)
+        if plot_final_rank:
+            ax.plot(
+                df_final.columns,
+                df_final.loc[method],
+                linestyle="--",
+                marker="o",
+                color=color,
+                alpha=0.7,
+            )
+
+    # --- Formatting
     ax.invert_yaxis()
-    ax.set_xticks(np.arange(1,25,1))
-    ax.set_yticks(np.arange(1,11,1))
+    ax.set_xticks(columns)
     ax.set_xlabel("Function ID")
-    ax.set_ylabel("Rank (lower = better)")
+    ax.set_ylabel("Rank")
     ax.set_title("Parallel Plot — Final vs Average Ranking (Functions)")
 
     ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
@@ -1105,32 +1147,8 @@ def best_method_per_function_rank_based(
 ) -> pd.DataFrame:
     r"""
     Determine the best method per function using rank aggregation across features.
-
-    Pipeline
-    --------------
-    1. Aggregate Wasserstein distances across instances for each
-       (function, feature, method).
-    2. For each (function, feature), rank methods by Wasserstein distance
-       (lower is better).
-    3. Aggregate these ranks across features for each (function, method).
-    4. Rank methods within each function based on the aggregated feature-rank score.
-    5. Compute the standard deviation/error of the feature-wise ranks for each (function, method) to indicate consistency across features.
-
-    This avoids aggregating raw Wasserstein distances across features, which may
-    be on different scales.
-
-    Args
-    --------------
-        df (pd.DataFrame): Must contain
-            ['function_id', 'instance_id', 'feature_name', 'method', 'wasserstein_distance'].
-        agg_instances (str): Aggregation across instances, 'mean' or 'median'.
-        agg_ranks (str): Aggregation across feature-wise ranks, 'mean' or 'median'.
-
-    Returns
-    --------------
-        pd.DataFrame: Columns
-            ['function_id', 'method', 'aggregated_feature_rank', 'final_rank'].
     """
+
     assert agg_instances in ["mean", "median"], "agg_instances must be 'mean' or 'median'"
     assert agg_ranks in ["mean", "median"], "agg_ranks must be 'mean' or 'median'"
 
@@ -1138,7 +1156,6 @@ def best_method_per_function_rank_based(
     df_feat = _aggregate_instances_per_feature(df, agg=agg_instances)
 
     # Step 2: rank methods within each (function, feature)
-    # smaller wasserstein_distance = better rank
     df_feat["feature_rank"] = (
         df_feat.groupby(["function_id", "feature_name"])["wasserstein_distance"]
         .rank(method="average", ascending=True)
@@ -1151,18 +1168,38 @@ def best_method_per_function_rank_based(
         .reset_index(name="aggregated_feature_rank")
     )
 
+    # Step 3_2: compute std of feature ranks
+    df_std = (
+        df_feat.groupby(["function_id", "method"])["feature_rank"]
+        .std()
+        .reset_index(name="rank_std_dev")
+    )
+
+
+
+    # Merge std into main dataframe
+    df_func = df_func.merge(df_std, on=["function_id", "method"], how="left")
+
+    # Step 3_3: Compute standard error of the mean rank across features
+
+    # Count number of features per (function, method)
+    df_count = (
+        df_feat.groupby(["function_id", "method"])
+        .size()
+        .reset_index(name="n_features")
+    )
+
+    # Merge counts into df_func
+    df_func = df_func.merge(df_count, on=["function_id", "method"], how="left")
+
+    # Compute standard error
+    df_func["rank_std_err"] = df_func["rank_std_dev"] / np.sqrt(df_func["n_features"]) 
+
     # Step 4: final ranking per function
     df_func["final_rank"] = (
         df_func.groupby("function_id")["aggregated_feature_rank"]
         .rank(method="average", ascending=True)
         .astype(int)
-    )
-
-    # Step 5: Add standard deviation of feature ranks for each (function, method)
-    df_func["rank_std_dev"] = (
-        df_feat.groupby("function_id")["feature_rank"]
-        .std()
-        .reset_index(name="rank_std_dev")
     )
 
     return df_func.sort_values(["function_id", "final_rank", "method"]).reset_index(drop=True)
@@ -1175,62 +1212,50 @@ def best_method_per_feature_rank_based(
 ) -> pd.DataFrame:
     r"""
     Determine the best method per feature across functions using rank aggregation.
-
-    Pipeline
-    --------------
-    1. Aggregate Wasserstein distances across instances for each
-       (function, feature, method).
-    2. For each (function, feature), rank methods by Wasserstein distance.
-    3. Aggregate these ranks across functions for each (feature, method).
-    4. Rank methods within each feature.
-    5. Add a standard deviation/error measure to the final ranking to indicate consistency across functions.
-
-    Args
-    --------------
-        df (pd.DataFrame): Must contain
-            ['function_id', 'instance_id', 'feature_name', 'method', 'wasserstein_distance'].
-        agg_instances (str): Aggregation across instances, 'mean' or 'median'.
-        agg_ranks (str): Aggregation across functions, 'mean' or 'median'.
-
-    Returns
-    --------------
-        pd.DataFrame: Columns
-            ['feature_name', 'method', 'aggregated_function_rank', 'final_rank'].
     """
+
     assert agg_instances in ["mean", "median"], "agg_instances must be 'mean' or 'median'"
     assert agg_ranks in ["mean", "median"], "agg_ranks must be 'mean' or 'median'"
 
-    # Step 1
+    # Step 1: aggregate over instances
     df_feat = _aggregate_instances_per_feature(df, agg=agg_instances)
 
-    # Step 2
+    # Step 2: rank methods within each (function, feature)
     df_feat["feature_rank"] = (
         df_feat.groupby(["function_id", "feature_name"])["wasserstein_distance"]
         .rank(method="average", ascending=True)
     )
 
-    # Step 3
+    # Step 3 + 5 combined: aggregate ranks across functions + compute stats
     df_feature = (
         df_feat.groupby(["feature_name", "method"])["feature_rank"]
-        .agg(agg_ranks)
-        .reset_index(name="aggregated_function_rank")
+        .agg(
+            aggregated_function_rank=agg_ranks,
+            rank_std_dev="std",
+            n_functions="count",
+        )
+        .reset_index()
     )
 
-    # Step 4
+    # Step 5_2: standard error
+    df_feature["rank_std_err"] = (
+        df_feature["rank_std_dev"] / np.sqrt(df_feature["n_functions"])
+    )
+
+    # Optional: handle NaNs (single function case)
+    df_feature["rank_std_dev"] = df_feature["rank_std_dev"].fillna(0.0)
+    df_feature["rank_std_err"] = df_feature["rank_std_err"].fillna(0.0)
+
+    # Step 4: final ranking per feature
     df_feature["final_rank"] = (
         df_feature.groupby("feature_name")["aggregated_function_rank"]
         .rank(method="average", ascending=True)
         .astype(int)
     )
 
-    # Step 5: Add standard deviation of ranks across functions for each (feature, method)
-    df_feature["rank_std_dev"] = (
-        df_feat.groupby("feature_name")["feature_rank"]
-        .std()
-        .reset_index(name="rank_std_dev")
-    )   
-
-    return df_feature.sort_values(["feature_name", "final_rank", "method"]).reset_index(drop=True)
+    return df_feature.sort_values(
+        ["feature_name", "final_rank", "method"]
+    ).reset_index(drop=True)
 
 
 def significance_best_vs_second_per_function_feature(

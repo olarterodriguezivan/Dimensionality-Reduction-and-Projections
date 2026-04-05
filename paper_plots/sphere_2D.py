@@ -25,7 +25,7 @@ plt.rcParams.update({
 # CONSTANTS
 # -----------------------------------------------------------------
 
-COLORMAP = "cividis" # or cividis or viridis_r or summer
+COLORMAP = "viridis" # or cividis or viridis_r or summer
 MARKER_COLOR = "black"
 
 SCRIPT_DIR = Path(__file__).parent
@@ -33,7 +33,7 @@ OUTPUT_DIR = SCRIPT_DIR / "outputs"
 
 FORMAT = "pdf"  # or "pdf"
 
-FUNCTION_ID = 5
+FUNCTION_ID = 16
 INSTANCE_ID = 1
 
 
@@ -95,7 +95,7 @@ def make_two_slices_plot(X: np.ndarray, Y: np.ndarray, Z: np.ndarray, ax: Axes, 
 
     angles = rng.uniform(0, 2 * np.pi, 2)
     line_length = np.sqrt(200)
-    colors = ["magenta", "cyan"]
+    colors = ["green", "cyan"]
     linestyles = ["--", "-."]
 
     for i, angle in enumerate(angles):
@@ -150,13 +150,19 @@ def make_one_slice_plot(X, Y, Z, ax: Axes, seed: int = 42,
 
     points_2d = uplift_points(points[:, None], angle)
 
+    
+
     if highlight:
         ax.plot(x_line, y_line, color="red", linewidth=4.5)
 
-    ax.plot(x_line, y_line, linestyle="--", color ="magenta", label="Embedding")
+    ax.plot(x_line, y_line, linestyle="--", color ="green", label="Embedding")
 
     ax.scatter(points_2d[:, 0], points_2d[:, 1],
                marker="x", color=MARKER_COLOR, label="Samples")
+
+    
+    
+    
 
     ax.legend()
 
