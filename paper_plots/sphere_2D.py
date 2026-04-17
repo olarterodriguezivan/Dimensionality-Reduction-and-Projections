@@ -26,7 +26,15 @@ plt.rcParams.update({
 # -----------------------------------------------------------------
 
 COLORMAP = "viridis" # or cividis or viridis_r or summer
-MARKER_COLOR = "black"
+MARKER_COLOR = "white"
+
+EMBEDDING_1_COLOR = "gold"
+EMBEDDING_2_COLOR = "cyan"
+
+SPACE_OF_INTEREST_COLOR = "red"
+SPACE_OF_INTEREST_LINEWIDTH = 2.5
+LAST_SPACE_OF_INTEREST_LINEWIDTH = 7.5
+
 
 SCRIPT_DIR = Path(__file__).parent
 OUTPUT_DIR = SCRIPT_DIR / "outputs"
@@ -56,7 +64,7 @@ def uplift_points(points: np.ndarray, angle: float) -> np.ndarray:
 def base_contour(X: np.ndarray, Y: np.ndarray, Z: np.ndarray, ax: Axes,
                  set_ylabel: bool = True) -> Any:
     """Draw contour background."""
-    contour = ax.contourf(X, Y, Z, levels=25, cmap=COLORMAP)
+    contour = ax.contourf(X, Y, Z, levels=25, cmap=COLORMAP, zorder=0)
 
     ax.set_xlabel(r"$x_1$")
 
@@ -69,34 +77,41 @@ def base_contour(X: np.ndarray, Y: np.ndarray, Z: np.ndarray, ax: Axes,
     return contour
 
 
-def make_full_sampling_plot(X: np.ndarray, Y: np.ndarray, Z: np.ndarray, ax: Axes) -> Any:
+def make_full_sampling_plot(X: np.ndarray, Y: np.ndarray, Z: np.ndarray, ax: Axes, seed: int = 42, 
+                            title: str = "Full Sampling", set_ylabel: bool = True) -> Any:
 
-    contour = base_contour(X, Y, Z, ax, set_ylabel=True)
+    contour = base_contour(X, Y, Z, ax, set_ylabel=set_ylabel)
 
-    ax.set_title("Full Sampling")
+    ax.set_title(title)
 
-    sampler = LatinHypercube(d=2, seed=42, optimization="lloyd")
+    sampler = LatinHypercube(d=2, seed=seed, optimization="random-cd")
     samples = scale(sampler.random(n=20), -5, 5)
 
-    ax.scatter(samples[:, 0], samples[:, 1],
-               color=MARKER_COLOR, marker="x", label="Samples")
+    samples_object = ax.scatter(samples[:, 0], samples[:, 1],
+               color=MARKER_COLOR, marker="x", label="Samples", zorder=1)
 
-    ax.legend()
+    #ax.legend()
 
-    return contour
+    return (contour, samples_object)
 
 
-def make_two_slices_plot(X: np.ndarray, Y: np.ndarray, Z: np.ndarray, ax: Axes, seed: int = 42):
+def make_two_slices_plot(X: np.ndarray, Y: np.ndarray, Z: np.ndarray, ax: Axes, seed: int = 42,
+                         title: str = "$K$ Embeddings", set_ylabel: bool = True)-> Any:
 
-    contour = base_contour(X, Y, Z, ax, set_ylabel=False)
-    ax.set_title("$k$ Embeddings")
+    contour = base_contour(X, Y, Z, ax, set_ylabel=set_ylabel)
+    ax.set_title(title)
 
     rng = np.random.default_rng(seed)
 
     angles = rng.uniform(0, 2 * np.pi, 2)
     line_length = np.sqrt(200)
-    colors = ["green", "cyan"]
+    colors = [EMBEDDING_1_COLOR, EMBEDDING_2_COLOR]
     linestyles = ["--", "-."]
+
+    embedding_object_list = []
+    points_object_list = []
+
+    zorders = np.linspace(1, 2, len(angles))
 
     for i, angle in enumerate(angles):
 
@@ -111,28 +126,32 @@ def make_two_slices_plot(X: np.ndarray, Y: np.ndarray, Z: np.ndarray, ax: Axes, 
 
         points_2d = uplift_points(points[:, None], angle)
 
-        ax.plot(x_line, y_line, linestyle=linestyles[i],
+        embedding_object = ax.plot(x_line, y_line, linestyle=linestyles[i],
                     label=f"Embedding {i+1}",
-                    color=colors[i])
+                    color=colors[i], zorder=zorders[i])
 
         if i == 1:
-            ax.scatter(points_2d[:, 0], points_2d[:, 1],
+            points_object = ax.scatter(points_2d[:, 0], points_2d[:, 1],
                    marker="x", color=MARKER_COLOR,
-                   label="Samples")
+                   label="Samples", zorder=zorders[i])
         else:
-            ax.scatter(points_2d[:, 0], points_2d[:, 1],
-                   marker="x", color=MARKER_COLOR)
+            points_object = ax.scatter(points_2d[:, 0], points_2d[:, 1],
+                   marker="x", color=MARKER_COLOR, zorder=zorders[i])
+        
+        embedding_object_list.append(embedding_object)
+        points_object_list.append(points_object)
 
-    ax.legend()
+    #ax.legend(facecolor="lightgray", framealpha=0.9)
 
-    return contour
+    return (contour, embedding_object_list, points_object_list)
 
 
 def make_one_slice_plot(X, Y, Z, ax: Axes, seed: int = 42,
-                        highlight: bool = False):
+                        highlight: bool = False, title: str = "Single Embedding", 
+                        set_ylabel: bool = True) -> Any:
 
-    contour = base_contour(X, Y, Z, ax, set_ylabel=False)
-    ax.set_title("Single Embedding")
+    contour = base_contour(X, Y, Z, ax, set_ylabel=set_ylabel)
+    ax.set_title(title)
 
     rng = np.random.default_rng(seed)
     angle = rng.uniform(0, 2*np.pi)
@@ -151,29 +170,29 @@ def make_one_slice_plot(X, Y, Z, ax: Axes, seed: int = 42,
     points_2d = uplift_points(points[:, None], angle)
 
     
+    interest_space = None
 
     if highlight:
-        ax.plot(x_line, y_line, color="red", linewidth=4.5)
+        interest_space = ax.plot(x_line, y_line, color=SPACE_OF_INTEREST_COLOR, linewidth=LAST_SPACE_OF_INTEREST_LINEWIDTH, 
+                                 zorder=1, label="ELA Computation Space")
 
-    ax.plot(x_line, y_line, linestyle="--", color ="green", label="Embedding")
+    embedding_object = ax.plot(x_line, y_line, linestyle="--", color = EMBEDDING_1_COLOR, label="Embedding", zorder=2)
 
-    ax.scatter(points_2d[:, 0], points_2d[:, 1],
-               marker="x", color=MARKER_COLOR, label="Samples")
+    points_object = ax.scatter(points_2d[:, 0], points_2d[:, 1],
+               marker="x", color=MARKER_COLOR, label="Samples", zorder=3)
 
-    
-    
-    
 
-    ax.legend()
-
-    return contour
+    #ax.legend(facecolor="lightgray", framealpha=0.9)
+    if highlight:
+        return (contour, embedding_object, points_object, interest_space)
+    return (contour, embedding_object, points_object)
 
 
 def main():
 
     problem = get_problem(fid=FUNCTION_ID, instance=INSTANCE_ID, dimension=2)
 
-    x = np.linspace(-5, 5, 100)
+    x = np.linspace(-5, 5, 500)
     y = x.copy()
 
     X, Y = np.meshgrid(x, y)
@@ -181,37 +200,45 @@ def main():
     inputs = np.column_stack([X.ravel(), Y.ravel()])
     Z = np.array([problem(p) for p in inputs]).reshape(X.shape)
 
-    fig, axes = plt.subplots(1, 4, figsize=(14, 6), sharey=True)
+    fig, axes = plt.subplots(1, 4, figsize=(10, 10), sharey=True, sharex=True)
 
-    contour = make_full_sampling_plot(X, Y, Z, axes[0])
-    make_two_slices_plot(X, Y, Z, axes[1])
-    make_one_slice_plot(X, Y, Z, axes[2])
-    make_one_slice_plot(X, Y, Z, axes[3], highlight=True)
 
-    for ii, ax in enumerate(axes):
+
+    contour, points_obj1 = make_full_sampling_plot(X, Y, Z, axes[0], title=r"\texttt{Full/ELA$_{\texttt{A}}$}")
+    contour2, emb_obj1, points_obj2 = make_two_slices_plot(X, Y, Z, axes[1], title=r"\texttt{Sliced/ELA$_{\texttt{A}}$}")
+    contour3, emb_obj2, points_obj3 = make_one_slice_plot(X, Y, Z, axes[2], title=r"\texttt{All\_in/ELA$_{\texttt{A}}$}", set_ylabel=True)
+    contour4, emb_obj3, points_obj4, interest_space = make_one_slice_plot(X, Y, Z, axes[3], highlight=True, title=r"\texttt{All\_in/ELA$_{\texttt{R}}$}", set_ylabel=True)
+
+    for ii, ax in enumerate(axes.flatten()):
         if ii < 3:
             for spine in ax.spines.values():
-                spine.set_edgecolor("red")
-                spine.set_linewidth(2)
+                spine.set_edgecolor(SPACE_OF_INTEREST_COLOR)
+                spine.set_linewidth(SPACE_OF_INTEREST_LINEWIDTH)
 
-    fig.colorbar(
+    cbar = fig.colorbar(
     contour,
     ax=axes,
     orientation="horizontal",
     location="top",
     pad=0.07,
-    shrink=0.3,
-    label=r"$f(\mathbf{x})$"
-)
+    shrink=0.6,
+    label=r"$f(\mathbf{x})$")
+
+    # Set the legend for the last subplot
+    handles = [emb_obj1[0][0], emb_obj1[1][0], points_obj4, interest_space[0]]
+    labels = ["Embedding 1", "Embedding 2", "Samples", "ELA Computation Space"]
+
+    axes[1].legend(handles=handles, labels=labels, bbox_to_anchor=(-0.71, -0.25), loc='upper left', facecolor="gainsboro", framealpha=0.9,
+                   edgecolor="black",fontsize=10, ncol=4)
 
     #plt.tight_layout()
     plt.show()
 
     # Save the figure
     OUTPUT_DIR.mkdir(exist_ok=True, parents=True)
-    fig.savefig(OUTPUT_DIR / f"sphere_2D_plot.{FORMAT}", transparent=True, dpi=300)
+    fig.savefig(OUTPUT_DIR / f"sphere_2D_plot.{FORMAT}", transparent=True, dpi=300, bbox_inches="tight")
 
-    fig.savefig(OUTPUT_DIR / f"sphere_2D_plot.pgf", transparent=True)
+    fig.savefig(OUTPUT_DIR / f"sphere_2D_plot.pgf", transparent=True, dpi=300, bbox_inches="tight")
 
     #import tikzplotlib
 
