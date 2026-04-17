@@ -1,3 +1,4 @@
+from matplotlib import colors
 import pandas as pd
 import seaborn as sns
 import numpy as np
@@ -8,10 +9,15 @@ from matplotlib.colors import ListedColormap, BoundaryNorm
 from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
 
-from typing import Tuple, List
+from typing import Dict, Tuple, List
 
 # Import the Wasserstein distance and wilcoxon computation functions
 from scipy.stats import wasserstein_distance, wilcoxon
+from scipy.stats import friedmanchisquare
+
+# Add the Nemenyi post-hoc test function
+import scikit_posthocs as sp
+
 
 
 
@@ -50,6 +56,10 @@ EPSILON = 1e-9 # To avoid log(0) or ./0 issues
 
 ROOT_DIRECTORY = Path(__file__).resolve().parent
 SAVE_FIGURE_DIRECTORY = ROOT_DIRECTORY.joinpath("tables_wasserstein_2_distances_slices_stats")
+
+if not SAVE_FIGURE_DIRECTORY.exists():
+    SAVE_FIGURE_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    
 
 DATA_SIZES = [200, 2000]
 REDUCTION_RATIOS = [0.5, 0.25, 0.1]
@@ -702,6 +712,8 @@ def heatmap_wasserstein_rankings_2(combined_df: pd.DataFrame,
         loc="upper left",
     )
 
+    ax.tick_params(axis='y', rotation=0)
+
     plt.tight_layout()
     return fig, ax
 
@@ -902,6 +914,8 @@ def heatmap_wasserstein_rankings_3(
         loc="upper left",
     )
 
+    ax.tick_params(axis='y', rotation=0)
+
     plt.tight_layout()
     return fig, ax
 
@@ -977,21 +991,32 @@ def plot_parallel_function_overlay(
         color = colors[i % len(colors)]
 
         # --- Average rank
-        ax.plot(
+        ax.scatter(
             df_avg.columns,
             df_avg.loc[method],
             color=color,
-            linewidth=2,
+            marker="o",
             label=method,
+
         )
 
         # --- Confidence interval
-        ax.fill_between(
+        #ax.fill_between(
+        #    df_avg.columns,
+        #    df_avg.loc[method] - 1.96 * df_std_error.loc[method],
+        #    df_avg.loc[method] + 1.96 * df_std_error.loc[method],
+        #    color=color,
+        #    alpha=0.2,
+        #)
+
+        ax.errorbar(
             df_avg.columns,
-            df_avg.loc[method] - 1.96 * df_std_error.loc[method],
-            df_avg.loc[method] + 1.96 * df_std_error.loc[method],
+            df_avg.loc[method],
+            yerr=1.96 * df_std_error.loc[method],
             color=color,
-            alpha=0.2,
+            fmt="o",
+            capsize=5,
+            #label=method
         )
 
         # --- Final rank overlay (optional)
@@ -1000,17 +1025,22 @@ def plot_parallel_function_overlay(
                 df_final.columns,
                 df_final.loc[method],
                 linestyle="--",
-                marker="o",
+                marker="x",
                 color=color,
                 alpha=0.7,
             )
 
     # --- Formatting
     ax.invert_yaxis()
+    ax.set_yticks(np.arange(1,11,1))
     ax.set_xticks(columns)
     ax.set_xlabel("Function ID")
     ax.set_ylabel("Rank")
-    ax.set_title("Parallel Plot — Final vs Average Ranking (Functions)")
+
+    if plot_final_rank:
+        ax.set_title("Final vs Average Ranking (Functions)")
+    else:
+        ax.set_title("Average Ranking (Functions)")
 
     ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
     ax.grid(True)
@@ -1018,9 +1048,23 @@ def plot_parallel_function_overlay(
     return fig, ax
 
 
-def plot_parallel_feature_overlay(df_rank_feat, method_order=None):
-    """
+def plot_parallel_feature_overlay(df_rank_feat:pd.DataFrame, 
+                                  method_order=None,
+                                  feature_order=None,
+                                  plot_final_rank:bool=False):
+    r"""
     Overlay FINAL rank and AVERAGE rank in one parallel plot (per feature).
+
+    Args
+    --------------
+        df_rank_feat (pd.DataFrame): A DataFrame containing columns 'method', 'feature_name', 'aggregated_function_rank', 'rank_std_err', and optionally 'final_rank'.
+        method_order (List[str], optional): A list specifying the order of methods to plot. If None, the order in df_rank_feat will be used.
+        feature_order (List[str], optional): A list specifying the order of features to plot. If None, the order in df_rank_feat will be used.
+        plot_final_rank (bool, optional): Whether to plot the final rank as an overlay. Default is False.
+    
+    Returns
+    --------------
+        Tuple[plt.Figure, plt.Axes]: The matplotlib Figure and Axes objects containing the plot.
     """
 
     df_final = df_rank_feat.pivot(
@@ -1035,12 +1079,25 @@ def plot_parallel_feature_overlay(df_rank_feat, method_order=None):
         values="aggregated_function_rank"
     )
 
+    df_error = df_rank_feat.pivot(
+        index="method",
+        columns="feature_name",
+        values="rank_std_err"
+    )
+
     df_final = df_final.sort_index(axis=1)
     df_avg = df_avg[df_final.columns]
+    df_error = df_error[df_final.columns]
 
     # Reindex ensures correct order
     df_final = df_final.reindex(method_order)
     df_avg   = df_avg.reindex(method_order)
+    df_error = df_error.reindex(method_order)
+
+    if feature_order is not None:
+        df_final = df_final[feature_order]
+        df_avg = df_avg[feature_order]
+        df_error = df_error[feature_order]
 
     fig, ax = plt.subplots(figsize=(12, 5))
 
@@ -1059,18 +1116,31 @@ def plot_parallel_feature_overlay(df_rank_feat, method_order=None):
             df_avg.loc[method],
             color=color,
             linewidth=2,
-            label=method
+            marker="o",
+            label=method,
+            linestyle="-",
         )
 
-        # Final rank
-        ax.plot(
-            range(len(df_final.columns)),
-            df_final.loc[method],
-            linestyle="--",
-            marker="o",
+        ax.errorbar(
+            range(len(df_avg.columns)),
+            df_avg.loc[method],
+            yerr=1.96 * df_error.loc[method],
+            capsize=5,
             color=color,
-            alpha=0.7
+            fmt="o",
         )
+
+
+        if plot_final_rank:
+            # Final rank
+            ax.scatter(
+                range(len(df_final.columns)),
+                df_final.loc[method],
+                linestyle="--",
+                marker="x",
+                color=color,
+                alpha=0.7
+            )
 
     ax.invert_yaxis()
 
@@ -1079,11 +1149,88 @@ def plot_parallel_feature_overlay(df_rank_feat, method_order=None):
     ax.set_xticks(range(len(df_final.columns)))
     ax.set_xticklabels(df_final.columns, rotation=90)
     ax.set_xlabel("Feature")
-    ax.set_ylabel("Rank (lower = better)")
-    ax.set_title("Parallel Plot — Final vs Average Ranking (Features)")
+    ax.set_ylabel("Rank")
+
+    if plot_final_rank:
+        ax.set_title("Final vs Average Ranking (Features)")
+    else:
+        ax.set_title("Average Ranking (Features)")
 
     ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
     ax.grid(True)
+
+    return fig, ax
+
+def plot_critical_difference_diagram_function(
+    avg_ranks,
+    nemenyi_df: pd.DataFrame,
+    alpha: float = 0.05,
+    method_order=None,
+    plot_title: str = "Critical Difference Diagram (Functions)",
+) -> Tuple[plt.Figure, plt.Axes]:
+    r"""
+    Plot a critical difference diagram based on average ranks.
+
+    Args
+    --------------
+        avg_ranks (pd.Series or pd.DataFrame):
+            Either:
+            - pd.Series: index=method, values=avg rank
+            - pd.DataFrame with columns ['method', 'avg_rank']
+
+        nemenyi_df (pd.DataFrame):
+            Square matrix of p-values (methods x methods)
+
+        alpha (float): significance level
+        method_order (List[str], optional): desired plotting order
+
+    Returns
+    --------------
+        Tuple[plt.Figure, plt.Axes]
+    """
+
+    # Start a vector of colors for the methods (will be used in CD diagram)
+    colors = plt.get_cmap("tab10").colors
+
+    # --- Convert avg_ranks to Series if needed
+    if isinstance(avg_ranks, pd.DataFrame):
+        if "method" in avg_ranks.columns:
+            avg_ranks = avg_ranks.set_index("method").iloc[:, 0]
+        else:
+            raise ValueError("avg_ranks DataFrame must contain 'method' column")
+
+    # --- Reorder if needed
+    if method_order is not None:
+        avg_ranks = avg_ranks.reindex(method_order)
+        nemenyi_df = nemenyi_df.loc[method_order, method_order]
+        # For the colors
+        method_to_color = {method: colors[i % len(colors)] for i, method in enumerate(method_order)}
+    else:
+        method_to_color = {method: colors[i % len(colors)] for i, method in enumerate(avg_ranks.index)}
+        
+    
+
+    # --- Sort by rank (important for CD diagram readability)
+    avg_ranks = avg_ranks.sort_values()
+
+    # --- Create plot
+    fig, ax = plt.subplots(figsize=(10, 3))
+
+    sp.critical_difference_diagram(
+        avg_ranks,
+        nemenyi_df,
+        alpha=alpha,
+        ax=ax,
+        color_palette=[method_to_color[method] for method in avg_ranks.index]
+    )
+
+    # 🔥 Override colors AFTER plotting
+    for text in ax.texts:
+        method = text.get_text()
+        if method in method_to_color:
+            text.set_color(method_to_color[method])
+
+    ax.set_title(plot_title)
 
     return fig, ax
 
@@ -1095,6 +1242,15 @@ def combine_wasserstein_results(
     r"""
     Combine multiple Wasserstein result dataframes into a single dataframe
     with a 'method' column.
+
+    Args
+    --------------
+        list_of_dfs (List[pd.DataFrame]): A list of DataFrames, each containing columns ['function_id', 'instance_id', 'feature_name', 'wasserstein_distance'].
+        dataset_names (List[str]): A list of names corresponding to each DataFrame in list_of_dfs, to be used in the 'method' column.   
+
+    Returns
+    --------------
+        pd.DataFrame: A combined DataFrame with columns ['function_id', 'instance_id', 'feature_name', 'method', 'wasserstein_distance'].
     """
     if len(list_of_dfs) != len(dataset_names):
         raise ValueError("Length of list_of_dfs and dataset_names must match")
@@ -1107,7 +1263,7 @@ def combine_wasserstein_results(
 
     return pd.concat(combined, ignore_index=True)
 
-from scipy.stats import friedmanchisquare, wilcoxon
+
 
 
 def _aggregate_instances_per_feature(
@@ -1147,6 +1303,18 @@ def best_method_per_function_rank_based(
 ) -> pd.DataFrame:
     r"""
     Determine the best method per function using rank aggregation across features.
+
+    Args
+    --------------
+        df (pd.DataFrame): Must contain
+            ['function_id', 'instance_id', 'feature_name', 'method', 'wasserstein_distance'].
+        agg_instances (str): Aggregation across instances for ranking, 'mean' or 'median'.
+        agg_ranks (str): Aggregation across features for final ranking, 'mean' or 'median'.
+    
+    Returns
+    --------------
+        pd.DataFrame: One row per (function, method), with columns
+            ['function_id', 'method', 'aggregated_feature_rank', 'rank_std_dev', 'rank_std_err', 'final_rank']. 
     """
 
     assert agg_instances in ["mean", "median"], "agg_instances must be 'mean' or 'median'"
@@ -1212,6 +1380,18 @@ def best_method_per_feature_rank_based(
 ) -> pd.DataFrame:
     r"""
     Determine the best method per feature across functions using rank aggregation.
+
+    Args
+    --------------
+        df (pd.DataFrame): Must contain
+            ['function_id', 'instance_id', 'feature_name', 'method', 'wasserstein_distance'].
+        agg_instances (str): Aggregation across instances for ranking, 'mean' or 'median'.
+        agg_ranks (str): Aggregation across functions for final ranking, 'mean' or 'median'.
+    
+    Returns
+    --------------
+        pd.DataFrame: One row per (feature, method), with columns
+            ['feature_name', 'method', 'aggregated_function_rank', 'rank_std_dev', 'rank_std_err', 'final_rank'].
     """
 
     assert agg_instances in ["mean", "median"], "agg_instances must be 'mean' or 'median'"
@@ -1452,8 +1632,107 @@ def friedman_test_per_feature(
     return pd.DataFrame(results).sort_values("feature_name").reset_index(drop=True)
 
 
+def nemenyi_test_from_rank_df(
+    df_rank: pd.DataFrame,
+    index_cols: List[str] = ["function_id"],
+    value_col: str = "aggregated_feature_rank",
+) -> Tuple[pd.DataFrame, pd.Series, pd.DataFrame, float, float]:
+    r"""
+    Perform Friedman + Nemenyi test from a rank DataFrame.
 
+    Supports:
+    - function-level (default)
+    - function × feature-level (global)
 
+    Args
+    --------------
+        df_rank : DataFrame containing at least
+            ['method', value_col] + index_cols
+        index_cols : list of columns defining datasets (blocks)
+            e.g. ['function_id'] or ['function_id', 'feature_name']
+        value_col : column containing rank values
+
+    Returns
+    --------------
+        df_matrix : pivot table (datasets × methods)
+        avg_ranks : average rank per method
+        nemenyi_df : pairwise p-values
+        stat : Friedman statistic
+        p : Friedman p-value
+    """
+
+    # --- Pivot: rows = datasets, cols = methods
+    df_matrix = df_rank.pivot_table(
+        index=index_cols,
+        columns="method",
+        values=value_col,
+        aggfunc="mean",   # safe even if duplicates
+    )
+
+    # --- Drop incomplete rows
+    df_matrix = df_matrix.dropna(axis=0, how="any")
+
+    if df_matrix.shape[0] < 2 or df_matrix.shape[1] < 2:
+        raise ValueError("Not enough data for Friedman test")
+
+    # --- Friedman test
+    stat, p = friedmanchisquare(*[df_matrix[c].values for c in df_matrix.columns])
+
+    # --- Nemenyi test
+    nemenyi = sp.posthoc_nemenyi_friedman(df_matrix.values)
+    nemenyi.index = df_matrix.columns
+    nemenyi.columns = df_matrix.columns
+
+    # --- Average ranks
+    avg_ranks = df_matrix.mean(axis=0).sort_values()
+
+    return df_matrix, avg_ranks, nemenyi, stat, p
+
+def nemenyi_grouping(avg_ranks: pd.Series, 
+                     nemenyi_df: pd.DataFrame, 
+                     alpha=0.05)->Dict[str, str]:
+    r"""
+    Assign group letters based on Nemenyi test.
+    Methods not significantly different share a group.
+
+    Args
+    --------------
+    - avg_ranks: Series of average ranks, indexed by method.
+    - nemenyi_df: DataFrame of Nemenyi p-values, indexed and columned
+        by method.
+    - alpha: significance level for grouping.
+
+    Returns
+    --------------
+    - groups: dict mapping method -> group letter (e.g. 'a', 'b', ...)
+    """
+
+    methods = avg_ranks.index.tolist()
+    groups = {}
+    current_group = 'a'
+
+    for i, m1 in enumerate(methods):
+        if m1 in groups:
+            continue
+
+        groups[m1] = current_group
+
+        for m2 in methods[i+1:]:
+            if nemenyi_df.loc[m1, m2] >= alpha:
+                groups[m2] = current_group
+
+        current_group = chr(ord(current_group) + 1)
+
+    return groups
+
+def print_nemenyi_summary(avg_ranks, groups):
+    r"""
+    Print clean ranking + grouping table.
+    """
+
+    print("\n=== Average ranks with significance groups ===")
+    for method in avg_ranks.index:
+        print(f"{method:40s}  rank={avg_ranks[method]:.3f}   group={groups[method]}")
 
 # -----------------------------------------------------------------------------
 # Main
@@ -1461,9 +1740,11 @@ def friedman_test_per_feature(
 
 
 def main() -> None:
+
+    # Load all datasets
     datasets = load_all_datasets()
 
-
+    # Get list of all feature names from a reference dataset (e.g. reduced with r=0.5)
     reference_df = datasets[("reduced", 200, 0.5)]
     all_feature_names = [
                             col for col in reference_df.columns
@@ -1567,6 +1848,37 @@ def main() -> None:
     print("\nBest method per function overall:")
     print(df_best_per_function.head(30))
 
+    # ------------------------------------------------------------------
+    # GLOBAL RANKING + NEMENYI TEST
+    # ------------------------------------------------------------------
+
+    df_matrix_1, avg_ranks_1, nemenyi_df_1, friedman_stat, friedman_p = (
+        nemenyi_test_from_rank_df(df_best_per_function,
+                                  index_cols=["function_id"])
+    )
+
+    print("\n=== Friedman test ===")
+    print(f"statistic = {friedman_stat:.4f}, p-value = {friedman_p:.4e}")
+
+    print("\n=== Nemenyi p-values ===")
+    print(nemenyi_df_1.round(4))
+
+    # Compute grouping
+    groups_1 = nemenyi_grouping(avg_ranks_1, nemenyi_df_1, alpha=0.05)
+
+    # Print clean summary
+    print_nemenyi_summary(avg_ranks_1, groups_1)
+
+    # Save results
+    nemenyi_df_1.to_csv(
+        SAVE_FIGURE_DIRECTORY / f"nemenyi_matrix_per_function_mode_{MODE}.csv"
+    )
+
+    avg_ranks_1.to_csv(
+        SAVE_FIGURE_DIRECTORY / f"average_ranks_per_function_mode_{MODE}.csv",
+        header=["avg_rank"]
+    )
+
     # 2) Best method per feature across functions
     df_best_per_feature = best_method_per_feature_rank_based(
         df_all_methods,
@@ -1576,6 +1888,48 @@ def main() -> None:
 
     print("\nBest method per feature:")
     print(df_best_per_feature.head(30))
+
+    # ------------------------------------------------------------------
+    # GLOBAL RANKING + NEMENYI TEST
+    # ------------------------------------------------------------------
+
+    df_feat = _aggregate_instances_per_feature(df_all_methods, agg="median")
+
+    df_feat["feature_rank"] = (
+        df_feat.groupby(["function_id", "feature_name"])["wasserstein_distance"]
+        .rank(method="average", ascending=True)
+    )
+
+
+    df_matrix_2, avg_ranks_2, nemenyi_df_2, friedman_stat, friedman_p = (
+    nemenyi_test_from_rank_df(
+        df_feat,
+        index_cols=["function_id", "feature_name"],
+        value_col="feature_rank",   # 🔥 THIS LINE FIXES YOUR ERROR
+    )
+    )
+
+    print("\n=== Friedman test ===")
+    print(f"statistic = {friedman_stat:.4f}, p-value = {friedman_p:.4e}")
+
+    print("\n=== Nemenyi p-values ===")
+    print(nemenyi_df_2.round(4))
+
+    # Compute grouping
+    groups_2 = nemenyi_grouping(avg_ranks_2, nemenyi_df_2, alpha=0.05)
+
+    # Print clean summary
+    print_nemenyi_summary(avg_ranks_2, groups_2)
+
+    # Save results
+    nemenyi_df_2.to_csv(
+        SAVE_FIGURE_DIRECTORY / f"nemenyi_matrix_per_feature_mode_{MODE}.csv"
+    )
+
+    avg_ranks_2.to_csv(
+        SAVE_FIGURE_DIRECTORY / f"average_ranks_per_feature_mode_{MODE}.csv",
+        header=["avg_rank"]
+    )
 
     # 3) Significance: best vs second-best for each function-feature pair
     df_significance = significance_best_vs_second_per_function_feature(
@@ -1605,7 +1959,7 @@ def main() -> None:
     df_significance.to_csv(SAVE_FIGURE_DIRECTORY / f"significance_best_vs_second_mode_{MODE}.csv", index=False)
     df_friedman.to_csv(SAVE_FIGURE_DIRECTORY / f"friedman_per_feature_mode_{MODE}.csv", index=False)
 
-    fig, ax = plot_parallel_feature_overlay(df_best_per_feature, method_order)
+    fig, ax = plot_parallel_feature_overlay(df_best_per_feature, method_order, feature_order=all_feature_names)
     fig.savefig(SAVE_FIGURE_DIRECTORY / f"wasserstein_ranking_parallel_feature_{MODE}.pdf", dpi=300, bbox_inches="tight")
 
     plt.close(fig)
@@ -1614,9 +1968,29 @@ def main() -> None:
     fig.savefig(SAVE_FIGURE_DIRECTORY / f"wasserstein_ranking_parallel_function_{MODE}.pdf", dpi=300, bbox_inches="tight")
 
     plt.close(fig)
+
+    fig, ax = plot_critical_difference_diagram_function(avg_ranks_1, 
+                                                        nemenyi_df_1, 
+                                                        alpha=0.05, 
+                                                        method_order=method_order)
+    
+    fig.savefig(SAVE_FIGURE_DIRECTORY / f"cd_diagram_mode_{MODE}_function.pdf",dpi=300, 
+                bbox_inches="tight")
+    plt.close(fig)
+
+    fig, ax = plot_critical_difference_diagram_function(avg_ranks_2, 
+                                                        nemenyi_df_2, 
+                                                        alpha=0.05, 
+                                                        method_order=method_order,
+                                                        plot_title="Critical Difference Diagram (Features)")
+    
+    fig.savefig(SAVE_FIGURE_DIRECTORY / f"cd_diagram_mode_{MODE}_feature.pdf",dpi=300, 
+                bbox_inches="tight")
+    plt.close(fig)
     
 
-    # The heatmap of best methods per function-feature combination is quite large, so we save it as a separate figure.
+    # The heatmap of best methods per function-feature combination is quite large, 
+    # so we save it as a separate figure.
     fig, ax = heatmap_wasserstein_rankings_2(
         df_all_methods,
         FUNCTION_IDS,
@@ -1629,7 +2003,8 @@ def main() -> None:
 
     plt.close(fig)
 
-    # The heatmap of best methods per function-feature combination is quite large, so we save it as a separate figure.
+    # The heatmap of best methods per function-feature combination is quite large, 
+    # so we save it as a separate figure.
     fig, ax = heatmap_wasserstein_rankings_3(
         df_all_methods,
         FUNCTION_IDS,
